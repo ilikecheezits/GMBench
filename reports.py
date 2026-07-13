@@ -1,165 +1,61 @@
-"""Benchmark report objects and text/JSON serialization."""
+"""Report generation helpers for benchmark outputs."""
 
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
-from enum import Enum
-from typing import Any, Dict, List
+from dataclasses import asdict
+from typing import List
 
-from deployment import Deployment
-from metrics import PillarEvaluation
-from utils import mean, utc_timestamp
+from benchmark import BenchmarkResult
+from leaderboard import RankedResult
 
 
-class PhaseGateResult(str, Enum):
-    """Lifecycle stage reached by a deployment after evaluation."""
-
-    NOT_READY = "NOT READY"
-    READY_FOR_ALPHA = "READY FOR ALPHA"
-    READY_FOR_BETA = "READY FOR BETA"
-    READY_FOR_LABS = "READY FOR LABS"
+def result_to_json(result: BenchmarkResult, indent: int = 2) -> str:
+    return json.dumps(asdict(result), indent=indent)
 
 
-@dataclass(slots=True)
-class BenchmarkReport:
-    """Full benchmark output for a single deployment."""
-
-    deployment: Deployment
-    technical_score: float
-    impact_score: float
-    evidence_score: float
-    capacity_delta_score: float
-    continuity_score: float
-    generalization_score: float
-    governance_score: float
-    overall_score: float
-    phase_result: PhaseGateResult
-    pillar_evaluations: Dict[str, PillarEvaluation] = field(default_factory=dict)
-    claim_confidence: str = "LOW"
-    blocked_by_governance: bool = False
-    block_reasons: List[str] = field(default_factory=list)
-    generated_at: str = field(default_factory=utc_timestamp)
-
-    def to_dict(self) -> Dict[str, Any]:
-        data = asdict(self)
-        data["phase_result"] = self.phase_result.value
-        return data
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), indent=indent)
-
-    def render_text(self) -> str:
-        lines: List[str] = []
-        lines.append("====================================")
-        lines.append("GOOD MODEL BENCHMARK REPORT")
-        lines.append("====================================")
-        lines.append("")
-        lines.append("Organization:")
-        lines.append(self.deployment.organization)
-        lines.append("")
-        lines.append("Workflow:")
-        lines.append(self.deployment.workflow)
-        lines.append("")
-
-        section_order = [
-            "Technical Reliability",
-            "Operational Impact",
-            "Evidence and Capacity Delta",
-            "Continuity",
-            "Generalization",
-            "Risk and Governance",
-        ]
-
-        score_map = {
-            "Technical Reliability": self.technical_score,
-            "Operational Impact": self.impact_score,
-            "Evidence and Capacity Delta": self.evidence_score,
-            "Continuity": self.continuity_score,
-            "Generalization": self.generalization_score,
-            "Risk and Governance": self.governance_score,
+def leaderboard_to_json(rankings: List[RankedResult], indent: int = 2) -> str:
+    payload = [
+        {
+            "rank": row.rank,
+            "score": row.score,
+            "workflow_name": row.result.workflow_name,
+            "workflow_type": row.result.workflow_type,
+            "dataset_name": row.result.dataset_name,
+            "task_name": row.result.task_name,
+            "metrics": row.result.metrics,
+            "telemetry_summary": row.result.telemetry_summary,
+            "trace_path": row.result.trace_path,
+            "failure_log_dir": row.result.failure_log_dir,
         }
-
-        for section in section_order:
-            lines.append(section)
-            lines.append("----------------------")
-            lines.append(f"Score: {score_map[section]:.1f}")
-            lines.append("")
-            details = self.pillar_evaluations.get(section)
-            if details:
-                for metric_label in details.metric_scores.keys():
-                    lines.append(metric_label)
-                if details.notes:
-                    lines.extend(details.notes)
-            lines.append("")
-
-        lines.append("Overall Score")
-        lines.append("")
-        lines.append(f"{self.overall_score:.1f}")
-        lines.append("")
-        lines.append("Capacity Delta Score")
-        lines.append("")
-        lines.append(f"{self.capacity_delta_score:.1f}")
-        lines.append("")
-        lines.append("Claim Confidence")
-        lines.append("")
-        lines.append(self.claim_confidence)
-        lines.append("")
-        lines.append("Governance Gate")
-        lines.append("")
-        lines.append("BLOCKED" if self.blocked_by_governance else "PASSED")
-        if self.block_reasons:
-            lines.append("")
-            lines.append("Governance Block Reasons")
-            lines.append("")
-            lines.extend(self.block_reasons)
-            lines.append("")
-        lines.append("PHASE RESULT")
-        lines.append("")
-        lines.append(self.phase_result.value)
-
-        return "\n".join(lines)
+        for row in rankings
+    ]
+    return json.dumps(payload, indent=indent)
 
 
-@dataclass(slots=True)
-class ComparisonReport:
-    """Result of benchmarking multiple deployments."""
-
-    reports: List[BenchmarkReport]
-
-    @property
-    def average_score(self) -> float:
-        return round(mean(report.overall_score for report in self.reports), 2)
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "average_score": self.average_score,
-            "reports": [report.to_dict() for report in self.reports],
-        }
-
-
-@dataclass(slots=True)
-class GeneralizationReport:
-    """Aggregated generalization analysis for one workflow pattern."""
-
-    workflow_name: str
-    deployment_count: int
-    represented_organizations: List[str]
-    generalization_score: float
-    candidate_for_labs: bool
-    pillar_evaluation: PillarEvaluation
-    generated_at: str = field(default_factory=utc_timestamp)
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "workflow_name": self.workflow_name,
-            "deployment_count": self.deployment_count,
-            "represented_organizations": self.represented_organizations,
-            "generalization_score": self.generalization_score,
-            "candidate_for_labs": self.candidate_for_labs,
-            "pillar_evaluation": asdict(self.pillar_evaluation),
-            "generated_at": self.generated_at,
-        }
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), indent=indent)
+def leaderboard_to_markdown(rankings: List[RankedResult]) -> str:
+    lines = [
+        "# Benchmark Leaderboard",
+        "",
+        "| Rank | System | Score | Accuracy | Judge | Hallucination | Schema Validity | API Calls | Prompt Tok | Completion Tok | Failure Rate | Latency (ms) | Cost (USD) |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for row in rankings:
+        metrics = row.result.metrics
+        lines.append(
+            "| "
+            f"{row.rank} | "
+            f"{row.result.workflow_name} | "
+            f"{row.score:.3f} | "
+            f"{metrics.get('accuracy', 0.0):.3f} | "
+            f"{metrics.get('llm_judge_quality', 0.0):.3f} | "
+            f"{metrics.get('hallucination_rate', 0.0):.3f} | "
+            f"{metrics.get('json_validity', 0.0):.3f} | "
+            f"{metrics.get('total_api_calls', 0.0):.2f} | "
+            f"{metrics.get('prompt_tokens', 0.0):.1f} | "
+            f"{metrics.get('completion_tokens', 0.0):.1f} | "
+            f"{metrics.get('failure_rate', 0.0):.3f} | "
+            f"{metrics.get('latency_ms', 0.0):.2f} | "
+            f"{metrics.get('cost_usd', 0.0):.5f} |"
+        )
+    return "\n".join(lines)

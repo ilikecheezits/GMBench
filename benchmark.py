@@ -1,293 +1,193 @@
-"""Top-level benchmark orchestrator with phase-gate logic."""
+"""Top-level benchmark orchestration for a dataset and metric suite."""
 
 from __future__ import annotations
 
+import asyncio
+import json
+from dataclasses import asdict
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence
+from pathlib import Path
+from typing import Any, Dict, List
 
-from deployment import DataSensitivityTier, Deployment, DeploymentStage
-from evaluators import (
-    BasePillarEvaluator,
-    GeneralizationEvaluator,
-    default_evaluators,
-)
-from metrics import PillarEvaluation
-from policy import BenchmarkPolicy, load_policy
-from reports import BenchmarkReport, ComparisonReport, GeneralizationReport, PhaseGateResult
-from utils import weighted_average
+import metrics  # noqa: F401
+from dataset import BenchmarkDataset
+from evaluators import EvaluationContext, Metric, MetricEvaluator
+from registry import METRIC_REGISTRY
+from runner import ExampleRun, Runner
+from workflow import SystemUnderTest
 
 
 @dataclass(slots=True)
-class PhaseGateEvaluator:
-    """Implements GMP Alpha/Beta/Labs graduation requirements."""
+class BenchmarkResult:
+    """Result payload for one system evaluated on one dataset."""
 
-    policy: BenchmarkPolicy
-
-    def _stage_rank(self, stage: DeploymentStage) -> int:
-        return self.policy.stage.rank.get(stage.value, 0)
-
-    def _cap_result_by_stage(self, stage: DeploymentStage, result: PhaseGateResult) -> PhaseGateResult:
-        # Stage-aware caps prevent overclaiming maturity before deployment readiness.
-        max_phase_value = self.policy.stage.max_phase.get(stage.value, PhaseGateResult.NOT_READY.value)
-        max_phase = PhaseGateResult(max_phase_value)
-
-        result_rank = self.policy.stage.phase_order.get(result.value, 0)
-        max_rank = self.policy.stage.phase_order.get(max_phase.value, 0)
-        if result_rank > max_rank:
-            return max_phase
-        return result
-
-    def evaluate(self, report: BenchmarkReport, cohort_size: int, org_count: int) -> PhaseGateResult:
-        deployment = report.deployment
-        evidence_org_count = max(org_count, deployment.flags.validated_organizations)
-        phase = self.policy.phase_gate
-
-        alpha_pass = (
-            report.impact_score >= phase.alpha_min_impact
-            and not deployment.flags.critical_technical_failure
-            and not deployment.flags.critical_governance_failure
-            and deployment.flags.case_study_exists
-        )
-
-        beta_pass = (
-            alpha_pass
-            and evidence_org_count >= phase.beta_min_org_count
-            and deployment.flags.volunteer_onboarding_succeeded
-            and deployment.flags.documentation_exists
-            and report.technical_score >= phase.beta_min_technical
-            and report.governance_score >= phase.beta_min_governance
-        )
-
-        maintenance_low = (
-            deployment.continuity.maintenance_complexity is not None
-            and deployment.continuity.maintenance_complexity <= phase.labs_max_maintenance_complexity
-        )
-
-        adoption_high = (
-            deployment.impact.adoption_rate is not None
-            and deployment.impact.adoption_rate >= phase.labs_min_adoption
-        )
-
-        labs_pass = (
-            beta_pass
-            and report.generalization_score >= phase.labs_min_generalization
-            and adoption_high
-            and maintenance_low
-            and report.continuity_score >= phase.labs_min_continuity
-            and report.governance_score >= phase.labs_min_governance
-            and deployment.flags.repeated_success_count >= phase.labs_min_repeated_success_count
-        )
-
-        if labs_pass:
-            return self._cap_result_by_stage(deployment.stage, PhaseGateResult.READY_FOR_LABS)
-        if beta_pass:
-            return self._cap_result_by_stage(deployment.stage, PhaseGateResult.READY_FOR_BETA)
-        if alpha_pass:
-            return self._cap_result_by_stage(deployment.stage, PhaseGateResult.READY_FOR_ALPHA)
-        return self._cap_result_by_stage(deployment.stage, PhaseGateResult.NOT_READY)
+    workflow_name: str
+    workflow_type: str
+    dataset_name: str
+    task_name: str
+    metrics: Dict[str, float]
+    metric_details: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    failure_cases: List[Dict[str, Any]] = field(default_factory=list)
+    telemetry_summary: Dict[str, Any] = field(default_factory=dict)
+    trace_path: str = ""
+    failure_log_dir: str = ""
 
 
-@dataclass(slots=True)
-class GoodModelBenchmark:
-    """Core framework API for GMP deployment benchmarking."""
+class Benchmark:
+    """Runs a black-box system against a dataset using selected metrics."""
 
-    policy: BenchmarkPolicy = field(default_factory=load_policy)
-    evaluators: List[BasePillarEvaluator] = field(default_factory=list)
-    generalization_evaluator: Optional[GeneralizationEvaluator] = None
-    phase_gate_evaluator: Optional[PhaseGateEvaluator] = None
+    def __init__(self, dataset: BenchmarkDataset, metrics: List[Metric], artifacts_dir: str = "artifacts") -> None:
+        self.dataset = dataset
+        self.metrics = list(metrics)
+        self.runner = Runner()
+        self.metric_evaluator = MetricEvaluator()
+        self.artifacts_dir = Path(artifacts_dir)
 
-    # Internal history enables cohort analysis and workflow generalization.
-    _history: List[BenchmarkReport] = field(default_factory=list, init=False, repr=False)
-
-    def __post_init__(self) -> None:
-        if not self.evaluators:
-            self.evaluators = default_evaluators(self.policy)
-        if self.generalization_evaluator is None:
-            self.generalization_evaluator = GeneralizationEvaluator(
-                list(self.policy.metric_specs.generalization),
-                self.policy.generalization,
-            )
-        if self.phase_gate_evaluator is None:
-            self.phase_gate_evaluator = PhaseGateEvaluator(policy=self.policy)
-
-    @classmethod
-    def from_policy_file(cls, path: str) -> "GoodModelBenchmark":
-        return cls(policy=load_policy(path))
-
-    def _governance_gate_reasons(self, deployment: Deployment, governance_score: float) -> List[str]:
-        profile = deployment.governance_profile
-        reasons: List[str] = []
-        gate = self.policy.governance_gate
-
-        if profile.is_excluded_use_case:
-            reason = profile.exclusion_reason or "Deployment marked as excluded use case."
-            reasons.append(reason)
-
-        if (
-            profile.data_sensitivity in {DataSensitivityTier.HIGH, DataSensitivityTier.CRITICAL}
-            and not profile.has_human_in_the_loop
-        ):
-            reasons.append("High-sensitivity deployment requires human-in-the-loop review.")
-
-        if profile.pii_stored and not profile.has_dpa_or_contract_controls:
-            reasons.append("PII storage requires DPA or equivalent contract controls.")
-
-        if profile.serves_vulnerable_population and not profile.has_incident_response_plan:
-            reasons.append("Vulnerable-population workflows require an incident response plan.")
-
-        if (
-            profile.data_sensitivity == DataSensitivityTier.CRITICAL
-            and profile.external_model_data_retention_days is not None
-            and profile.external_model_data_retention_days > gate.critical_max_retention_days
-        ):
-            reasons.append("Critical data tier requires short external model retention windows.")
-
-        if (
-            profile.data_sensitivity in {DataSensitivityTier.HIGH, DataSensitivityTier.CRITICAL}
-            and governance_score < gate.high_sensitivity_min_governance_score
-        ):
-            reasons.append("Governance score below minimum threshold for high-sensitivity deployment.")
-
-        return reasons
-
-    def _claim_confidence(self, evidence_score: float, governance_score: float, blocked: bool) -> str:
-        confidence_policy = self.policy.claim_confidence
-        if blocked:
-            return confidence_policy.blocked_label
-
-        confidence = weighted_average(
-            [
-                (evidence_score, confidence_policy.evidence_weight),
-                (governance_score, confidence_policy.governance_weight),
-            ]
-        )
-        if confidence >= confidence_policy.high_min:
-            return confidence_policy.high_label
-        if confidence >= confidence_policy.moderate_min:
-            return confidence_policy.moderate_label
-        if confidence >= confidence_policy.low_min:
-            return confidence_policy.low_label
-        return confidence_policy.very_low_label
-
-    def run(self, deployment: Deployment) -> BenchmarkReport:
-        """Run benchmark for a single deployment."""
-        pillar_map: Dict[str, PillarEvaluation] = {}
-
-        for evaluator in self.evaluators:
-            result = evaluator.evaluate(deployment)
-            pillar_map[result.pillar_name] = result
-
-        generalization_eval = self.generalization_evaluator.evaluate(deployment)
-        pillar_map["Generalization"] = PillarEvaluation(
-            pillar_name="Generalization",
-            score=generalization_eval.score,
-            metric_scores=generalization_eval.metric_scores,
-            missing_required_metrics=generalization_eval.missing_required_metrics,
-            notes=generalization_eval.notes,
-        )
-
-        technical_score = pillar_map["Technical Reliability"].score
-        impact_score = pillar_map["Operational Impact"].score
-        evidence_score = pillar_map["Evidence and Capacity Delta"].score
-        continuity_score = pillar_map["Continuity"].score
-        governance_score = pillar_map["Risk and Governance"].score
-        generalization_score = pillar_map["Generalization"].score
-        capacity_delta_score = evidence_score
-        governance_gate_reasons = self._governance_gate_reasons(deployment, governance_score)
-        blocked_by_governance = bool(governance_gate_reasons)
-        overall_weights = self.policy.overall_weights
-
-        overall_score = round(
-            weighted_average(
-                [
-                    (technical_score, overall_weights.technical),
-                    (impact_score, overall_weights.impact),
-                    (evidence_score, overall_weights.evidence),
-                    (continuity_score, overall_weights.continuity),
-                    (generalization_score, overall_weights.generalization),
-                    (governance_score, overall_weights.governance),
-                ]
-            ),
-            2,
-        )
-
-        workflow_reports = [
-            rep for rep in self._history if rep.deployment.workflow == deployment.workflow
+        auto_metric_names = [
+            "latency_ms",
+            "cost_usd",
+            "prompt_tokens",
+            "completion_tokens",
+            "total_api_calls",
+            "failure_rate",
+            "retry_count",
+            "peak_latency_ms",
+            "average_call_latency_ms",
+            "cost_per_success",
+            "token_efficiency",
         ]
-        cohort_size = len(workflow_reports) + 1
-        org_count = len({rep.deployment.organization for rep in workflow_reports} | {deployment.organization})
+        seen = {metric.name for metric in self.metrics}
+        for metric_name in auto_metric_names:
+            if metric_name in seen:
+                continue
+            metric_cls = METRIC_REGISTRY.get(metric_name)
+            if metric_cls is not None:
+                self.metrics.append(metric_cls())
 
-        preliminary = BenchmarkReport(
-            deployment=deployment,
-            technical_score=technical_score,
-            impact_score=impact_score,
-            evidence_score=evidence_score,
-            capacity_delta_score=capacity_delta_score,
-            continuity_score=continuity_score,
-            generalization_score=generalization_score,
-            governance_score=governance_score,
-            overall_score=overall_score,
-            phase_result=PhaseGateResult.NOT_READY,
-            pillar_evaluations=pillar_map,
-            claim_confidence=self._claim_confidence(
-                evidence_score=evidence_score,
-                governance_score=governance_score,
-                blocked=blocked_by_governance,
-            ),
-            blocked_by_governance=blocked_by_governance,
-            block_reasons=governance_gate_reasons,
+    @staticmethod
+    def _aggregate_telemetry(runs: List[ExampleRun]) -> Dict[str, Any]:
+        call_count = 0
+        prompt_tokens = 0
+        completion_tokens = 0
+        total_cost = 0.0
+        total_latency = 0.0
+        peak_latency = 0.0
+        retry_count = 0
+        failures = 0
+        rate_limits = 0
+        providers = set()
+        models = set()
+        temperatures = []
+        context_lengths = []
+
+        for run in runs:
+            telem = run.output.telemetry
+            call_count += telem.total_api_calls
+            prompt_tokens += telem.prompt_tokens
+            completion_tokens += telem.completion_tokens
+            total_cost += telem.total_cost_usd
+            total_latency += telem.total_latency_ms
+            peak_latency = max(peak_latency, telem.peak_latency_ms)
+            retry_count += telem.retry_count
+            failures += telem.failures
+            rate_limits += telem.rate_limits
+            for call in telem.calls:
+                providers.add(call.provider)
+                models.add(call.model)
+                temperatures.append(call.temperature)
+                context_lengths.append(call.context_length)
+
+        avg_latency = (total_latency / call_count) if call_count else 0.0
+        avg_temp = (sum(temperatures) / len(temperatures)) if temperatures else 0.0
+        avg_context_length = (sum(context_lengths) / len(context_lengths)) if context_lengths else 0.0
+
+        return {
+            "total_api_calls": call_count,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+            "total_cost_usd": round(total_cost, 6),
+            "total_latency_ms": round(total_latency, 4),
+            "peak_latency_ms": round(peak_latency, 4),
+            "average_latency_ms": round(avg_latency, 4),
+            "retry_count": retry_count,
+            "provider": ",".join(sorted(providers)) if providers else "unknown",
+            "model": ",".join(sorted(models)) if models else "unknown",
+            "temperature": round(avg_temp, 4),
+            "context_length": round(avg_context_length, 2),
+            "failures": failures,
+            "rate_limits": rate_limits,
+        }
+
+    def _write_failure_logs(self, system: SystemUnderTest, runs: List[ExampleRun]) -> tuple[str, List[Dict[str, Any]]]:
+        log_dir = self.artifacts_dir / "failure_logs" / system.name.replace(" ", "_").lower()
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        failures: List[Dict[str, Any]] = []
+        for run in runs:
+            if not run.error:
+                continue
+            payload = {
+                "example_id": run.example.id,
+                "input": run.example.input_text,
+                "expected_output": run.example.ground_truth,
+                "actual_output": run.output.structured_output,
+                "raw_model_responses": run.output.raw_model_responses,
+                "prompts": run.output.prompts,
+                "intermediate_outputs": run.output.intermediate_outputs,
+                "exceptions": run.output.exceptions,
+                "exception_stack": run.exception_stack,
+                "timing": {
+                    "example_latency_ms": run.latency_ms,
+                    "total_call_latency_ms": run.output.telemetry.total_latency_ms,
+                },
+                "telemetry": self._aggregate_telemetry([run]),
+            }
+            out_path = log_dir / f"{run.example.id}.json"
+            out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            failures.append({"example_id": run.example.id, "error": run.error, "log_path": str(out_path)})
+
+        return str(log_dir), failures
+
+    def _write_traces(self, system: SystemUnderTest, runs: List[ExampleRun]) -> str:
+        trace_dir = self.artifacts_dir / "traces"
+        trace_dir.mkdir(parents=True, exist_ok=True)
+        trace_payload = {
+            "system": system.name,
+            "dataset": self.dataset.name,
+            "examples": [
+                {
+                    "example_id": run.example.id,
+                    "trace": [asdict(event) for event in run.output.traces],
+                }
+                for run in runs
+            ],
+        }
+        trace_path = trace_dir / f"{system.name.replace(' ', '_').lower()}__{self.dataset.name}.json"
+        trace_path.write_text(json.dumps(trace_payload, indent=2), encoding="utf-8")
+        return str(trace_path)
+
+    async def arun(self, system: SystemUnderTest) -> BenchmarkResult:
+        runs: List[ExampleRun] = await self.runner.evaluate(system, self.dataset)
+        context = EvaluationContext(system=system, dataset=self.dataset, runs=runs)
+        metric_results = await self.metric_evaluator.evaluate(self.metrics, context)
+
+        failure_log_dir, failures = self._write_failure_logs(system, runs)
+        trace_path = self._write_traces(system, runs)
+        telemetry_summary = self._aggregate_telemetry(runs)
+
+        return BenchmarkResult(
+            workflow_name=system.name,
+            workflow_type=system.system_type,
+            dataset_name=self.dataset.name,
+            task_name=self.dataset.task_name,
+            metrics={result.name: result.value for result in metric_results},
+            metric_details={result.name: {"metric_type": result.metric_type, **result.details} for result in metric_results},
+            failure_cases=failures,
+            telemetry_summary=telemetry_summary,
+            trace_path=trace_path,
+            failure_log_dir=failure_log_dir,
         )
 
-        if blocked_by_governance:
-            preliminary.phase_result = PhaseGateResult.NOT_READY
-        else:
-            preliminary.phase_result = self.phase_gate_evaluator.evaluate(
-                preliminary, cohort_size=cohort_size, org_count=org_count
-            )
-
-        self._history.append(preliminary)
-        return preliminary
-
-    def compare(self, deployments: Sequence[Deployment]) -> ComparisonReport:
-        """Benchmark and compare multiple deployments."""
-        reports = [self.run(dep) for dep in deployments]
-        reports.sort(key=lambda rep: rep.overall_score, reverse=True)
-        return ComparisonReport(reports=reports)
-
-    def generalize(
-        self,
-        workflow_name: str,
-        deployments: Optional[Sequence[Deployment]] = None,
-    ) -> GeneralizationReport:
-        """Aggregate workflow-level generalization for one pattern."""
-        if deployments:
-            new_reports = [self.run(dep) for dep in deployments if dep.workflow == workflow_name]
-            _ = new_reports
-
-        matching_reports = [
-            rep for rep in self._history if rep.deployment.workflow == workflow_name
-        ]
-        matching_deployments = [rep.deployment for rep in matching_reports]
-        pillar_eval = self.generalization_evaluator.evaluate_group(matching_deployments)
-
-        organizations = sorted({dep.organization for dep in matching_deployments})
-        labs = self.policy.labs_candidate
-        candidate_for_labs = (
-            pillar_eval.score >= labs.min_generalization_score
-            and len(matching_deployments) >= labs.min_deployments
-            and len(organizations) >= labs.min_organizations
-        )
-
-        return GeneralizationReport(
-            workflow_name=workflow_name,
-            deployment_count=len(matching_deployments),
-            represented_organizations=organizations,
-            generalization_score=pillar_eval.score,
-            candidate_for_labs=candidate_for_labs,
-            pillar_evaluation=pillar_eval,
-        )
-
-    @property
-    def history(self) -> List[BenchmarkReport]:
-        """Read-only snapshot of reports generated by this benchmark instance."""
-        return list(self._history)
+    def run(self, system: SystemUnderTest) -> BenchmarkResult:
+        return asyncio.run(self.arun(system))

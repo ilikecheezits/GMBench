@@ -1,60 +1,168 @@
-# Good Model Benchmark
+# Good Model Labs Benchmark Framework
 
-For a plain-language walkthrough of how the benchmark works end to end, see [BENCHMARK_EXPLAINED.md](BENCHMARK_EXPLAINED.md).
+This repository benchmarks complete AI systems that solve recurring nonprofit operational tasks.
 
-Good Model Benchmark is a modular evaluation framework for nonprofit AI deployments.
-It is designed for Good Model Project (GMP) use cases where the benchmark target is a
-real deployment inside an organization, not a generic model leaderboard.
+For a plain-language deep dive, see [GOOD_MODEL_LABS_BENCHMARK.md](GOOD_MODEL_LABS_BENCHMARK.md).
 
-## What This Framework Evaluates
+It does not benchmark nonprofits.
+It does not benchmark deployment outcomes.
 
-Each deployment is scored across six pillars:
+The core abstraction is SystemUnderTest.
+A system can be prompt-only, RAG, agentic workflow, parser pipeline, or eventually a fine-tuned model.
 
-1. Technical Reliability
-2. Operational Impact
-3. Evidence and Capacity Delta
-4. Continuity
-5. Generalizability
-6. Risk and Governance
+Every benchmarked system implements an async black-box interface:
 
-Each run produces a `BenchmarkReport` with a phase-gate decision:
+```python
+class SystemUnderTest(ABC):
+	async def run(self, example: BenchmarkExample) -> SystemOutput:
+		...
+```
 
-- Ready for Alpha
-- Ready for Beta
-- Ready for Labs
-- Not Ready
+## Design Goal
 
-Additional GMP-aligned controls are enforced:
+Build a reusable benchmark foundation for Good Model Labs, where systems are compared on standardized datasets for recurring tasks.
 
-- Stage-aware phase caps (`Needs Assessment`, `AI Setup`, `Workflow Automation`, `Custom Build`)
-- Governance hard gates for sensitive use cases
-- Evidence quality weighting so low-trust claims cannot dominate outcomes
+Example task:
 
-## Package Layout
+- Food pantry intake note -> structured client JSON
+
+The benchmark answers:
+
+- Which implementation performs best on this task?
+
+## Architecture
 
 ```text
 .
 ├── benchmark.py
-├── policy.py
-├── deployment.py
+├── runner.py
+├── workflow.py
+├── providers.py
+├── dataset.py
 ├── metrics.py
 ├── evaluators.py
+├── leaderboard.py
 ├── reports.py
-├── config/
-│   └── policy.override.example.json
+├── registry.py
+├── workflows/
+│   └── food_pantry_intake.py
 ├── datasets/
+│   └── food_pantry_intake.py
 ├── examples/
-├── utils.py
+│   └── run_food_pantry_benchmark.py
+├── tests/
+│   └── test_labs_benchmark.py
 └── main.py
 ```
 
+## Core Concepts
+
+1. SystemUnderTest
+
+- Black-box task system interface.
+- Benchmark does not assume prompts, agents, or model type.
+
+2. Provider abstraction
+
+- Unified provider interface for OpenAI, Anthropic, Gemini, and Mock.
+- Real API usage when environment keys are present:
+	- OPENAI_API_KEY
+	- ANTHROPIC_API_KEY
+	- GOOGLE_API_KEY
+
+3. BenchmarkDataset
+
+- List of DatasetExample records.
+- Each example includes input_text, ground_truth, metadata.
+
+4. Runner
+
+- Executes a system over dataset examples.
+- Captures output, latency, and runtime errors.
+
+5. Metric
+
+- Pluggable class with a compute(context) method.
+- New metrics can be added without touching core benchmark logic.
+
+6. Benchmark
+
+- Runs Runner + metric evaluator.
+- Returns BenchmarkResult with metric values and failure cases.
+
+7. Leaderboard
+
+- Compares multiple systems.
+- Uses caller-provided ranking weights (no hardcoded rank strategy in core).
+
+8. Registry
+
+- Systems, datasets, and metrics self-register.
+- Automatic discovery via module and package scanning.
+
+## Built-in Example
+
+Included benchmark task:
+
+- Food Pantry Intake Structuring
+- Dataset id: food_pantry_intake_v1 (5 examples)
+
+Included systems:
+
+- Food Pantry Intake Workflow A
+- Food Pantry Intake Workflow B
+- Food Pantry Intake Workflow C
+
+Included metrics:
+
+- accuracy
+- precision
+- recall
+- hallucination_rate
+- json_validity
+- latency_ms
+- cost_usd
+- robustness
+- safety
+- pii_leakage
+- prompt_injection
+- cross_org
+- cross_language
+- cross_model
+- prompt_tokens
+- completion_tokens
+- total_api_calls
+- failure_rate
+- retry_count
+- peak_latency_ms
+- average_call_latency_ms
+- cost_per_success
+- token_efficiency
+- llm_judge_quality
+
+## Evaluator Types
+
+The framework supports three evaluator families:
+
+1. Rule-based evaluators
+- JSON validity, latency, cost, token usage, API call count, failure rate.
+
+2. Reference-based evaluators
+- Accuracy, precision, recall, hallucination, robustness, cross-org/language/model.
+
+3. LLM-as-a-Judge evaluators
+- Rubric-based quality scoring for tasks where exact matching is insufficient.
+
 ## Quick Start
 
-Run the demo:
+Run the benchmark demo:
 
 ```bash
 python main.py
 ```
+
+When API keys are configured, systems use real provider calls automatically.
+Without keys, the framework falls back to MockProvider for local testing.
 
 Run tests:
 
@@ -62,72 +170,63 @@ Run tests:
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-## Runtime Policy Configuration
-
-All thresholds, score weights, evidence scoring constants, stage caps, and metric specs are now centralized in `policy.py`.
-
-Use a policy override file at runtime:
-
-```bash
-export GMBENCH_POLICY_FILE=config/policy.override.example.json
-python main.py
-```
-
-Or construct directly in code:
+## Programmatic Usage
 
 ```python
-from benchmark import GoodModelBenchmark
+import metrics  # ensures built-in metrics register
+from benchmark import Benchmark
+from leaderboard import Leaderboard
+from registry import (
+	DATASET_REGISTRY,
+	SYSTEM_REGISTRY,
+	build_metric_suite,
+	discover_package_modules,
+)
 
-benchmark = GoodModelBenchmark.from_policy_file("config/policy.override.example.json")
+discover_package_modules("datasets")
+discover_package_modules("workflows")
+
+dataset = DATASET_REGISTRY["food_pantry_intake_v1"]()
+systems = [
+	SYSTEM_REGISTRY["food_pantry_intake_a"](),
+	SYSTEM_REGISTRY["food_pantry_intake_b"](),
+	SYSTEM_REGISTRY["food_pantry_intake_c"](),
+]
+
+metrics = build_metric_suite(["accuracy", "json_validity", "hallucination_rate", "latency_ms", "cost_usd"])
+benchmark = Benchmark(dataset=dataset, metrics=metrics)
+
+leaderboard = Leaderboard(
+	benchmark=benchmark,
+	ranking_weights={"accuracy": 0.7, "json_validity": 0.2, "cost_usd": -0.1},
+)
+
+rankings = leaderboard.rank(systems)
 ```
 
-Optional environment overrides (examples):
+## Telemetry, Traces, and Failure Logs
 
-```bash
-export GMBENCH_PHASE_ALPHA_MIN_IMPACT=62
-export GMBENCH_GOV_HIGH_SENS_MIN_SCORE=82
-python main.py
-```
+Each run automatically records telemetry fields such as:
 
-Programmatic usage:
+1. Total API calls
+2. Prompt and completion tokens
+3. Total, average, and peak latency
+4. Retry count
+5. Provider/model/temperature/context length
+6. Total cost and cost-per-success
+7. Failures and rate-limit events
 
-```python
-from benchmark import GoodModelBenchmark
-from deployment import Deployment
+Artifacts are saved under artifacts/:
 
-benchmark = GoodModelBenchmark()
-report = benchmark.run(deployment)
-comparison = benchmark.compare([deployment1, deployment2, deployment3])
-generalization = benchmark.generalize(workflow_name="Intake Summarization")
+1. traces/: serialized step-by-step execution traces for all evaluated examples
+2. failure_logs/: failed-example logs with input, expected, actual, prompts, model responses, intermediate outputs, and stack traces
 
-print(report.to_json())
-```
+## Extending to New Benchmarks
 
-## Extending The Framework
+To add a new benchmark (Grant Reporting, Missed Call Triage, Knowledge Retrieval, etc):
 
-### Add new metric fields
-
-1. Add fields to the relevant dataclass in `deployment.py`.
-2. Add corresponding `MetricSpec` entries in `evaluators.py`.
-3. Optionally tune weighting and required flags.
-
-### Add a new deployment domain
-
-No code changes are required for domain type itself. Use `deployment_type` and `metadata`
-fields to capture domain-specific context for food pantries, shelters, clinics, schools,
-legal aid organizations, animal welfare groups, or climate organizations.
-
-### Add a custom evaluator
-
-1. Implement `BasePillarEvaluator`.
-2. Pass custom evaluators to `GoodModelBenchmark(evaluators=[...])`.
-3. Reweight overall score logic in `benchmark.py` if needed.
-
-## Design Notes
-
-- Dataclasses and strict typing are used throughout.
-- Pillar evaluators are decoupled from report rendering.
-- Phase-gate logic is centralized in `PhaseGateEvaluator`.
-- Governance hard-gating is centralized in `GoodModelBenchmark._governance_gate_reasons`.
-- Runtime policy loading and deep-merge overrides are centralized in `policy.py`.
-- Reports serialize cleanly to JSON and can later be exported to markdown or PDF.
+1. Add a dataset module under datasets.
+2. Add one or more system modules under workflows.
+3. Register systems and dataset with decorators.
+4. Add task-specific metrics if needed.
+5. Run through Benchmark + Leaderboard without changing core benchmark code.
