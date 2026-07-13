@@ -8,7 +8,7 @@ from typing import Iterable, List, Sequence
 
 from deployment import Deployment
 from metrics import MetricSpec, PillarEvaluation, evaluate_metrics
-from utils import mean
+from utils import clamp, mean, weighted_average
 
 
 class BasePillarEvaluator(ABC):
@@ -108,6 +108,95 @@ class GeneralizationEvaluator(BasePillarEvaluator):
         )
 
 
+class EvidenceEvaluator(BasePillarEvaluator):
+    """Scores evidence quality and observed operational capacity improvements."""
+
+    pillar_name = "Evidence and Capacity Delta"
+
+    def evaluate(self, deployment: Deployment) -> PillarEvaluation:
+        evidence = deployment.capacity_evidence
+        metric_scores = {}
+        notes: List[str] = []
+
+        source_reliability = {
+            "SYSTEM_LOGS": 100.0,
+            "MANUAL_LOGS": 80.0,
+            "SURVEY": 70.0,
+            "INTERVIEW": 60.0,
+            "ESTIMATE": 45.0,
+        }
+        source_score = source_reliability[evidence.evidence_source.value]
+        metric_scores["Evidence Source Reliability"] = source_score
+
+        weighted_scores = [(source_score, 0.25)]
+
+        if (
+            evidence.baseline_task_minutes is not None
+            and evidence.followup_task_minutes is not None
+            and evidence.baseline_task_minutes > 0
+        ):
+            time_saved_pct = (
+                (evidence.baseline_task_minutes - evidence.followup_task_minutes)
+                / evidence.baseline_task_minutes
+            ) * 100.0
+            time_saved_score = clamp(50.0 + (time_saved_pct * 0.5), 0.0, 100.0)
+            metric_scores["Task Time Delta"] = round(time_saved_score, 2)
+            weighted_scores.append((time_saved_score, 0.25))
+        else:
+            notes.append("Missing baseline/follow-up task time for capacity delta.")
+
+        if (
+            evidence.baseline_error_rate is not None
+            and evidence.followup_error_rate is not None
+            and evidence.baseline_error_rate >= 0
+            and evidence.followup_error_rate >= 0
+        ):
+            baseline = max(evidence.baseline_error_rate, 1e-9)
+            error_delta_pct = ((baseline - evidence.followup_error_rate) / baseline) * 100.0
+            error_score = clamp(50.0 + (error_delta_pct * 0.5), 0.0, 100.0)
+            metric_scores["Error Rate Delta"] = round(error_score, 2)
+            weighted_scores.append((error_score, 0.20))
+
+        if evidence.staff_confidence_delta is not None:
+            confidence_score = clamp(50.0 + evidence.staff_confidence_delta, 0.0, 100.0)
+            metric_scores["Staff Confidence Delta"] = round(confidence_score, 2)
+            weighted_scores.append((confidence_score, 0.10))
+
+        if evidence.continuity_improvement is not None:
+            continuity_score = clamp(float(evidence.continuity_improvement), 0.0, 100.0)
+            metric_scores["Continuity Improvement"] = round(continuity_score, 2)
+            weighted_scores.append((continuity_score, 0.10))
+
+        if evidence.sample_size is not None:
+            sample_score = clamp(evidence.sample_size * 8.0, 0.0, 100.0)
+            metric_scores["Sample Size Confidence"] = round(sample_score, 2)
+            weighted_scores.append((sample_score, 0.05))
+            if evidence.sample_size < 5:
+                notes.append("Small sample size lowers confidence in impact claims.")
+        else:
+            notes.append("Sample size not provided for impact evidence.")
+
+        if evidence.measured_weeks is not None:
+            duration_score = clamp((evidence.measured_weeks / 12.0) * 100.0, 0.0, 100.0)
+            metric_scores["Measurement Duration"] = round(duration_score, 2)
+            weighted_scores.append((duration_score, 0.05))
+            if evidence.measured_weeks < 4:
+                notes.append("Measurement period is short; verify durability over time.")
+        else:
+            notes.append("Measurement duration not provided.")
+
+        if evidence.evidence_source.value in {"INTERVIEW", "ESTIMATE"}:
+            notes.append("Evidence quality is low-trust without logs or structured records.")
+
+        overall = round(weighted_average(weighted_scores), 2)
+        return PillarEvaluation(
+            pillar_name=self.pillar_name,
+            score=overall,
+            metric_scores=metric_scores,
+            notes=notes,
+        )
+
+
 def default_technical_specs() -> List[MetricSpec]:
     return [
         MetricSpec("schema_validity", "Schema Validity", 1.0, 0, 100, True, True),
@@ -181,6 +270,7 @@ def default_evaluators() -> List[BasePillarEvaluator]:
     return [
         SpecBasedEvaluator("Technical Reliability", "technical", default_technical_specs()),
         SpecBasedEvaluator("Operational Impact", "impact", default_impact_specs()),
+        EvidenceEvaluator(),
         SpecBasedEvaluator("Continuity", "continuity", default_continuity_specs()),
         SpecBasedEvaluator("Risk and Governance", "governance", default_governance_specs()),
     ]

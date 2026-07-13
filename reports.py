@@ -28,12 +28,17 @@ class BenchmarkReport:
     deployment: Deployment
     technical_score: float
     impact_score: float
+    evidence_score: float
+    capacity_delta_score: float
     continuity_score: float
     generalization_score: float
     governance_score: float
     overall_score: float
     phase_result: PhaseGateResult
     pillar_evaluations: Dict[str, PillarEvaluation] = field(default_factory=dict)
+    claim_confidence: str = "LOW"
+    blocked_by_governance: bool = False
+    block_reasons: List[str] = field(default_factory=list)
     generated_at: str = field(default_factory=utc_timestamp)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -60,6 +65,7 @@ class BenchmarkReport:
         section_order = [
             "Technical Reliability",
             "Operational Impact",
+            "Evidence and Capacity Delta",
             "Continuity",
             "Generalization",
             "Risk and Governance",
@@ -68,6 +74,7 @@ class BenchmarkReport:
         score_map = {
             "Technical Reliability": self.technical_score,
             "Operational Impact": self.impact_score,
+            "Evidence and Capacity Delta": self.evidence_score,
             "Continuity": self.continuity_score,
             "Generalization": self.generalization_score,
             "Risk and Governance": self.governance_score,
@@ -90,6 +97,23 @@ class BenchmarkReport:
         lines.append("")
         lines.append(f"{self.overall_score:.1f}")
         lines.append("")
+        lines.append("Capacity Delta Score")
+        lines.append("")
+        lines.append(f"{self.capacity_delta_score:.1f}")
+        lines.append("")
+        lines.append("Claim Confidence")
+        lines.append("")
+        lines.append(self.claim_confidence)
+        lines.append("")
+        lines.append("Governance Gate")
+        lines.append("")
+        lines.append("BLOCKED" if self.blocked_by_governance else "PASSED")
+        if self.block_reasons:
+            lines.append("")
+            lines.append("Governance Block Reasons")
+            lines.append("")
+            lines.extend(self.block_reasons)
+            lines.append("")
         lines.append("PHASE RESULT")
         lines.append("")
         lines.append(self.phase_result.value)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
-from deployment import Deployment
+from deployment import DataSensitivityTier, Deployment, DeploymentStage
 from evaluators import (
     BasePillarEvaluator,
     GeneralizationEvaluator,
@@ -20,6 +20,29 @@ from utils import weighted_average
 @dataclass(slots=True)
 class PhaseGateEvaluator:
     """Implements GMP Alpha/Beta/Labs graduation requirements."""
+
+    @staticmethod
+    def _stage_rank(stage: DeploymentStage) -> int:
+        rank_map = {
+            DeploymentStage.NEEDS_ASSESSMENT: 0,
+            DeploymentStage.AI_SETUP: 1,
+            DeploymentStage.WORKFLOW_AUTOMATION: 2,
+            DeploymentStage.CUSTOM_BUILD: 3,
+        }
+        return rank_map[stage]
+
+    def _cap_result_by_stage(self, stage: DeploymentStage, result: PhaseGateResult) -> PhaseGateResult:
+        # Stage-aware caps prevent overclaiming maturity before deployment readiness.
+        if self._stage_rank(stage) == 0:
+            return PhaseGateResult.NOT_READY
+        if self._stage_rank(stage) == 1 and result in {
+            PhaseGateResult.READY_FOR_BETA,
+            PhaseGateResult.READY_FOR_LABS,
+        }:
+            return PhaseGateResult.READY_FOR_ALPHA
+        if self._stage_rank(stage) == 2 and result == PhaseGateResult.READY_FOR_LABS:
+            return PhaseGateResult.READY_FOR_BETA
+        return result
 
     def evaluate(self, report: BenchmarkReport, cohort_size: int, org_count: int) -> PhaseGateResult:
         deployment = report.deployment
@@ -62,12 +85,12 @@ class PhaseGateEvaluator:
         )
 
         if labs_pass:
-            return PhaseGateResult.READY_FOR_LABS
+            return self._cap_result_by_stage(deployment.stage, PhaseGateResult.READY_FOR_LABS)
         if beta_pass:
-            return PhaseGateResult.READY_FOR_BETA
+            return self._cap_result_by_stage(deployment.stage, PhaseGateResult.READY_FOR_BETA)
         if alpha_pass:
-            return PhaseGateResult.READY_FOR_ALPHA
-        return PhaseGateResult.NOT_READY
+            return self._cap_result_by_stage(deployment.stage, PhaseGateResult.READY_FOR_ALPHA)
+        return self._cap_result_by_stage(deployment.stage, PhaseGateResult.NOT_READY)
 
 
 @dataclass(slots=True)
@@ -82,6 +105,57 @@ class GoodModelBenchmark:
 
     # Internal history enables cohort analysis and workflow generalization.
     _history: List[BenchmarkReport] = field(default_factory=list, init=False, repr=False)
+
+    def _governance_gate_reasons(self, deployment: Deployment, governance_score: float) -> List[str]:
+        profile = deployment.governance_profile
+        reasons: List[str] = []
+
+        if profile.is_excluded_use_case:
+            reason = profile.exclusion_reason or "Deployment marked as excluded use case."
+            reasons.append(reason)
+
+        if (
+            profile.data_sensitivity in {DataSensitivityTier.HIGH, DataSensitivityTier.CRITICAL}
+            and not profile.has_human_in_the_loop
+        ):
+            reasons.append("High-sensitivity deployment requires human-in-the-loop review.")
+
+        if profile.pii_stored and not profile.has_dpa_or_contract_controls:
+            reasons.append("PII storage requires DPA or equivalent contract controls.")
+
+        if profile.serves_vulnerable_population and not profile.has_incident_response_plan:
+            reasons.append("Vulnerable-population workflows require an incident response plan.")
+
+        if (
+            profile.data_sensitivity == DataSensitivityTier.CRITICAL
+            and profile.external_model_data_retention_days is not None
+            and profile.external_model_data_retention_days > 30
+        ):
+            reasons.append("Critical data tier requires short external model retention windows.")
+
+        if profile.data_sensitivity in {DataSensitivityTier.HIGH, DataSensitivityTier.CRITICAL} and governance_score < 75:
+            reasons.append("Governance score below minimum threshold for high-sensitivity deployment.")
+
+        return reasons
+
+    @staticmethod
+    def _claim_confidence(evidence_score: float, governance_score: float, blocked: bool) -> str:
+        if blocked:
+            return "VERY LOW"
+
+        confidence = weighted_average(
+            [
+                (evidence_score, 0.7),
+                (governance_score, 0.3),
+            ]
+        )
+        if confidence >= 80:
+            return "HIGH"
+        if confidence >= 60:
+            return "MODERATE"
+        if confidence >= 40:
+            return "LOW"
+        return "VERY LOW"
 
     def run(self, deployment: Deployment) -> BenchmarkReport:
         """Run benchmark for a single deployment."""
@@ -102,18 +176,23 @@ class GoodModelBenchmark:
 
         technical_score = pillar_map["Technical Reliability"].score
         impact_score = pillar_map["Operational Impact"].score
+        evidence_score = pillar_map["Evidence and Capacity Delta"].score
         continuity_score = pillar_map["Continuity"].score
         governance_score = pillar_map["Risk and Governance"].score
         generalization_score = pillar_map["Generalization"].score
+        capacity_delta_score = evidence_score
+        governance_gate_reasons = self._governance_gate_reasons(deployment, governance_score)
+        blocked_by_governance = bool(governance_gate_reasons)
 
         overall_score = round(
             weighted_average(
                 [
-                    (technical_score, 0.25),
-                    (impact_score, 0.20),
-                    (continuity_score, 0.20),
-                    (generalization_score, 0.15),
-                    (governance_score, 0.20),
+                    (technical_score, 0.22),
+                    (impact_score, 0.18),
+                    (evidence_score, 0.12),
+                    (continuity_score, 0.17),
+                    (generalization_score, 0.13),
+                    (governance_score, 0.18),
                 ]
             ),
             2,
@@ -129,17 +208,29 @@ class GoodModelBenchmark:
             deployment=deployment,
             technical_score=technical_score,
             impact_score=impact_score,
+            evidence_score=evidence_score,
+            capacity_delta_score=capacity_delta_score,
             continuity_score=continuity_score,
             generalization_score=generalization_score,
             governance_score=governance_score,
             overall_score=overall_score,
             phase_result=PhaseGateResult.NOT_READY,
             pillar_evaluations=pillar_map,
+            claim_confidence=self._claim_confidence(
+                evidence_score=evidence_score,
+                governance_score=governance_score,
+                blocked=blocked_by_governance,
+            ),
+            blocked_by_governance=blocked_by_governance,
+            block_reasons=governance_gate_reasons,
         )
 
-        preliminary.phase_result = self.phase_gate_evaluator.evaluate(
-            preliminary, cohort_size=cohort_size, org_count=org_count
-        )
+        if blocked_by_governance:
+            preliminary.phase_result = PhaseGateResult.NOT_READY
+        else:
+            preliminary.phase_result = self.phase_gate_evaluator.evaluate(
+                preliminary, cohort_size=cohort_size, org_count=org_count
+            )
 
         self._history.append(preliminary)
         return preliminary

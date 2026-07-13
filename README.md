@@ -6,13 +6,14 @@ real deployment inside an organization, not a generic model leaderboard.
 
 ## What This Framework Evaluates
 
-Each deployment is scored across five pillars:
+Each deployment is scored across six pillars:
 
 1. Technical Reliability
 2. Operational Impact
-3. Continuity
-4. Generalizability
-5. Risk and Governance
+3. Evidence and Capacity Delta
+4. Continuity
+5. Generalizability
+6. Risk and Governance
 
 Each run produces a `BenchmarkReport` with a phase-gate decision:
 
@@ -20,6 +21,12 @@ Each run produces a `BenchmarkReport` with a phase-gate decision:
 - Ready for Beta
 - Ready for Labs
 - Not Ready
+
+Additional GMP-aligned controls are enforced:
+
+- Stage-aware phase caps (`Needs Assessment`, `AI Setup`, `Workflow Automation`, `Custom Build`)
+- Governance hard gates for sensitive use cases
+- Evidence quality weighting so low-trust claims cannot dominate outcomes
 
 ## Package Layout
 
@@ -42,6 +49,12 @@ Run the demo:
 
 ```bash
 python main.py
+```
+
+Run tests:
+
+```bash
+python -m unittest discover -s tests -p "test_*.py"
 ```
 
 Programmatic usage:
@@ -83,4 +96,5 @@ legal aid organizations, animal welfare groups, or climate organizations.
 - Dataclasses and strict typing are used throughout.
 - Pillar evaluators are decoupled from report rendering.
 - Phase-gate logic is centralized in `PhaseGateEvaluator`.
+- Governance hard-gating is centralized in `GoodModelBenchmark._governance_gate_reasons`.
 - Reports serialize cleanly to JSON and can later be exported to markdown or PDF.

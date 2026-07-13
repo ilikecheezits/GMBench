@@ -3,7 +3,36 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from enum import Enum
 from typing import Any, Dict, Optional
+
+
+class DeploymentStage(str, Enum):
+    """Lifecycle stage for a GMP deployment."""
+
+    NEEDS_ASSESSMENT = "NEEDS ASSESSMENT"
+    AI_SETUP = "AI SETUP"
+    WORKFLOW_AUTOMATION = "WORKFLOW AUTOMATION"
+    CUSTOM_BUILD = "CUSTOM BUILD"
+
+
+class DataSensitivityTier(str, Enum):
+    """Data sensitivity used for governance gating."""
+
+    LOW = "LOW"
+    MODERATE = "MODERATE"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class EvidenceSource(str, Enum):
+    """How operational impact evidence was collected."""
+
+    SYSTEM_LOGS = "SYSTEM_LOGS"
+    MANUAL_LOGS = "MANUAL_LOGS"
+    SURVEY = "SURVEY"
+    INTERVIEW = "INTERVIEW"
+    ESTIMATE = "ESTIMATE"
 
 
 @dataclass(slots=True)
@@ -96,6 +125,36 @@ class DeploymentFlags:
 
 
 @dataclass(slots=True)
+class CapacityEvidence:
+    """Evidence used to validate real operational capacity improvements."""
+
+    baseline_task_minutes: Optional[float] = None
+    followup_task_minutes: Optional[float] = None
+    baseline_error_rate: Optional[float] = None
+    followup_error_rate: Optional[float] = None
+    staff_confidence_delta: Optional[float] = None
+    continuity_improvement: Optional[float] = None
+    evidence_source: EvidenceSource = EvidenceSource.ESTIMATE
+    sample_size: Optional[int] = None
+    measured_weeks: Optional[float] = None
+
+
+@dataclass(slots=True)
+class GovernanceProfile:
+    """Operational governance controls beyond metric scores."""
+
+    data_sensitivity: DataSensitivityTier = DataSensitivityTier.MODERATE
+    serves_vulnerable_population: bool = False
+    has_human_in_the_loop: bool = True
+    pii_stored: bool = False
+    external_model_data_retention_days: Optional[int] = None
+    has_incident_response_plan: bool = False
+    has_dpa_or_contract_controls: bool = False
+    is_excluded_use_case: bool = False
+    exclusion_reason: Optional[str] = None
+
+
+@dataclass(slots=True)
 class Deployment:
     """Represents one nonprofit AI deployment to benchmark."""
 
@@ -108,6 +167,9 @@ class Deployment:
     governance: GovernanceMetrics
     generalization: GeneralizationSignals = field(default_factory=GeneralizationSignals)
     flags: DeploymentFlags = field(default_factory=DeploymentFlags)
+    stage: DeploymentStage = DeploymentStage.AI_SETUP
+    capacity_evidence: CapacityEvidence = field(default_factory=CapacityEvidence)
+    governance_profile: GovernanceProfile = field(default_factory=GovernanceProfile)
 
     # Optional metadata used in cross-context generalization analysis.
     region: Optional[str] = None
