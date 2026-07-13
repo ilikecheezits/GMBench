@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import re
@@ -377,18 +378,20 @@ class QualityJudgeMetric(LLMJudgeMetric):
         provider: BaseProvider | None = None,
         judge_model: str = "gpt-4o-mini",
         rubric: str | None = None,
+        max_concurrency: int = 4,
     ) -> None:
         self.provider = provider or provider_from_environment()
         self.judge_model = judge_model
+        self.max_concurrency = max(1, max_concurrency)
         self.rubric = rubric or (
             "Score 0..1 based on factuality, completeness, and usefulness for nonprofit operations. "
             "Return JSON: {\"score\": <float>, \"reason\": <string>}"
         )
 
     async def compute(self, context: EvaluationContext) -> MetricResult:
-        scores = []
-        reasons = []
-        for run in context.runs:
+        semaphore = asyncio.Semaphore(self.max_concurrency)
+
+        async def _judge_run(run) -> tuple[float, str]:
             prompt = (
                 "You are an evaluation judge.\n"
                 f"Rubric: {self.rubric}\n"
@@ -396,12 +399,13 @@ class QualityJudgeMetric(LLMJudgeMetric):
                 f"Expected: {json.dumps(run.example.ground_truth, ensure_ascii=True)}\n"
                 f"Actual: {json.dumps(run.output.structured_output or {}, ensure_ascii=True)}"
             )
-            response = await self.provider.generate(
-                messages=[{"role": "user", "content": prompt}],
-                model=self.judge_model,
-                temperature=0.0,
-                max_tokens=220,
-            )
+            async with semaphore:
+                response = await self.provider.generate(
+                    messages=[{"role": "user", "content": prompt}],
+                    model=self.judge_model,
+                    temperature=0.0,
+                    max_tokens=220,
+                )
             try:
                 payload = json.loads(response.content)
                 score = float(payload.get("score", 0.0))
@@ -409,8 +413,11 @@ class QualityJudgeMetric(LLMJudgeMetric):
             except json.JSONDecodeError:
                 score = 0.0
                 reason = response.content[:200]
-            scores.append(max(0.0, min(1.0, score)))
-            reasons.append(reason)
+            return max(0.0, min(1.0, score)), reason
+
+        judged = await asyncio.gather(*(_judge_run(run) for run in context.runs))
+        scores = [score for score, _ in judged]
+        reasons = [reason for _, reason in judged]
 
         return MetricResult(
             name=self.name,

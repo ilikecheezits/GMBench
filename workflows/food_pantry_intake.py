@@ -90,7 +90,7 @@ class _BaseFoodPantrySystem(SystemUnderTest):
     system_type = "workflow_orchestration"
     description = "Structured extraction from pantry intake notes."
 
-    def __init__(self, provider: BaseProvider | None = None, model: str = "gpt-5-mini") -> None:
+    def __init__(self, provider: BaseProvider | None = None, model: str = "gpt-4o-mini") -> None:
         self.provider = provider or provider_from_environment()
         self.model = model
 
