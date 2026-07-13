@@ -5,16 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
-from .deployment import Deployment
-from .evaluators import (
+from deployment import Deployment
+from evaluators import (
     BasePillarEvaluator,
     GeneralizationEvaluator,
     default_evaluators,
     default_generalization_specs,
 )
-from .metrics import PillarEvaluation
-from .reports import BenchmarkReport, ComparisonReport, GeneralizationReport, PhaseGateResult
-from .utils import weighted_average
+from metrics import PillarEvaluation
+from reports import BenchmarkReport, ComparisonReport, GeneralizationReport, PhaseGateResult
+from utils import weighted_average
 
 
 @dataclass(slots=True)

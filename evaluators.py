@@ -6,9 +6,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Iterable, List, Sequence
 
-from .deployment import Deployment
-from .metrics import MetricSpec, PillarEvaluation, evaluate_metrics
-from .utils import mean
+from deployment import Deployment
+from metrics import MetricSpec, PillarEvaluation, evaluate_metrics
+from utils import mean
 
 
 class BasePillarEvaluator(ABC):

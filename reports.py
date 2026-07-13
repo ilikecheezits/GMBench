@@ -7,9 +7,9 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict, List
 
-from .deployment import Deployment
-from .metrics import PillarEvaluation
-from .utils import mean, utc_timestamp
+from deployment import Deployment
+from metrics import PillarEvaluation
+from utils import mean, utc_timestamp
 
 
 class PhaseGateResult(str, Enum):

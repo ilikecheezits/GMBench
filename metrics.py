@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Tuple
 
-from .utils import clamp, weighted_average
+from utils import clamp, weighted_average
 
 
 @dataclass(frozen=True, slots=True)

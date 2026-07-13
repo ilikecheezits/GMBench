@@ -24,7 +24,7 @@ Each run produces a `BenchmarkReport` with a phase-gate decision:
 ## Package Layout
 
 ```text
-good_model_benchmark/
+.
 ├── benchmark.py
 ├── deployment.py
 ├── metrics.py
@@ -33,8 +33,7 @@ good_model_benchmark/
 ├── datasets/
 ├── examples/
 ├── utils.py
-├── main.py
-└── __init__.py
+└── main.py
 ```
 
 ## Quick Start
@@ -48,7 +47,8 @@ python main.py
 Programmatic usage:
 
 ```python
-from good_model_benchmark import GoodModelBenchmark, Deployment
+from benchmark import GoodModelBenchmark
+from deployment import Deployment
 
 benchmark = GoodModelBenchmark()
 report = benchmark.run(deployment)
