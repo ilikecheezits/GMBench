@@ -1,5 +1,7 @@
 # Good Model Benchmark
 
+For a plain-language walkthrough of how the benchmark works end to end, see [BENCHMARK_EXPLAINED.md](BENCHMARK_EXPLAINED.md).
+
 Good Model Benchmark is a modular evaluation framework for nonprofit AI deployments.
 It is designed for Good Model Project (GMP) use cases where the benchmark target is a
 real deployment inside an organization, not a generic model leaderboard.
