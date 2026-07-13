@@ -10,9 +10,9 @@ from evaluators import (
     BasePillarEvaluator,
     GeneralizationEvaluator,
     default_evaluators,
-    default_generalization_specs,
 )
 from metrics import PillarEvaluation
+from policy import BenchmarkPolicy, load_policy
 from reports import BenchmarkReport, ComparisonReport, GeneralizationReport, PhaseGateResult
 from utils import weighted_average
 
@@ -21,35 +21,29 @@ from utils import weighted_average
 class PhaseGateEvaluator:
     """Implements GMP Alpha/Beta/Labs graduation requirements."""
 
-    @staticmethod
-    def _stage_rank(stage: DeploymentStage) -> int:
-        rank_map = {
-            DeploymentStage.NEEDS_ASSESSMENT: 0,
-            DeploymentStage.AI_SETUP: 1,
-            DeploymentStage.WORKFLOW_AUTOMATION: 2,
-            DeploymentStage.CUSTOM_BUILD: 3,
-        }
-        return rank_map[stage]
+    policy: BenchmarkPolicy
+
+    def _stage_rank(self, stage: DeploymentStage) -> int:
+        return self.policy.stage.rank.get(stage.value, 0)
 
     def _cap_result_by_stage(self, stage: DeploymentStage, result: PhaseGateResult) -> PhaseGateResult:
         # Stage-aware caps prevent overclaiming maturity before deployment readiness.
-        if self._stage_rank(stage) == 0:
-            return PhaseGateResult.NOT_READY
-        if self._stage_rank(stage) == 1 and result in {
-            PhaseGateResult.READY_FOR_BETA,
-            PhaseGateResult.READY_FOR_LABS,
-        }:
-            return PhaseGateResult.READY_FOR_ALPHA
-        if self._stage_rank(stage) == 2 and result == PhaseGateResult.READY_FOR_LABS:
-            return PhaseGateResult.READY_FOR_BETA
+        max_phase_value = self.policy.stage.max_phase.get(stage.value, PhaseGateResult.NOT_READY.value)
+        max_phase = PhaseGateResult(max_phase_value)
+
+        result_rank = self.policy.stage.phase_order.get(result.value, 0)
+        max_rank = self.policy.stage.phase_order.get(max_phase.value, 0)
+        if result_rank > max_rank:
+            return max_phase
         return result
 
     def evaluate(self, report: BenchmarkReport, cohort_size: int, org_count: int) -> PhaseGateResult:
         deployment = report.deployment
         evidence_org_count = max(org_count, deployment.flags.validated_organizations)
+        phase = self.policy.phase_gate
 
         alpha_pass = (
-            report.impact_score >= 55
+            report.impact_score >= phase.alpha_min_impact
             and not deployment.flags.critical_technical_failure
             and not deployment.flags.critical_governance_failure
             and deployment.flags.case_study_exists
@@ -57,31 +51,31 @@ class PhaseGateEvaluator:
 
         beta_pass = (
             alpha_pass
-            and evidence_org_count >= 2
+            and evidence_org_count >= phase.beta_min_org_count
             and deployment.flags.volunteer_onboarding_succeeded
             and deployment.flags.documentation_exists
-            and report.technical_score >= 75
-            and report.governance_score >= 80
+            and report.technical_score >= phase.beta_min_technical
+            and report.governance_score >= phase.beta_min_governance
         )
 
         maintenance_low = (
             deployment.continuity.maintenance_complexity is not None
-            and deployment.continuity.maintenance_complexity <= 40
+            and deployment.continuity.maintenance_complexity <= phase.labs_max_maintenance_complexity
         )
 
         adoption_high = (
             deployment.impact.adoption_rate is not None
-            and deployment.impact.adoption_rate >= 70
+            and deployment.impact.adoption_rate >= phase.labs_min_adoption
         )
 
         labs_pass = (
             beta_pass
-            and report.generalization_score >= 80
+            and report.generalization_score >= phase.labs_min_generalization
             and adoption_high
             and maintenance_low
-            and report.continuity_score >= 75
-            and report.governance_score >= 85
-            and deployment.flags.repeated_success_count >= 3
+            and report.continuity_score >= phase.labs_min_continuity
+            and report.governance_score >= phase.labs_min_governance
+            and deployment.flags.repeated_success_count >= phase.labs_min_repeated_success_count
         )
 
         if labs_pass:
@@ -97,18 +91,33 @@ class PhaseGateEvaluator:
 class GoodModelBenchmark:
     """Core framework API for GMP deployment benchmarking."""
 
-    evaluators: List[BasePillarEvaluator] = field(default_factory=default_evaluators)
-    generalization_evaluator: GeneralizationEvaluator = field(
-        default_factory=lambda: GeneralizationEvaluator(default_generalization_specs())
-    )
-    phase_gate_evaluator: PhaseGateEvaluator = field(default_factory=PhaseGateEvaluator)
+    policy: BenchmarkPolicy = field(default_factory=load_policy)
+    evaluators: List[BasePillarEvaluator] = field(default_factory=list)
+    generalization_evaluator: Optional[GeneralizationEvaluator] = None
+    phase_gate_evaluator: Optional[PhaseGateEvaluator] = None
 
     # Internal history enables cohort analysis and workflow generalization.
     _history: List[BenchmarkReport] = field(default_factory=list, init=False, repr=False)
 
+    def __post_init__(self) -> None:
+        if not self.evaluators:
+            self.evaluators = default_evaluators(self.policy)
+        if self.generalization_evaluator is None:
+            self.generalization_evaluator = GeneralizationEvaluator(
+                list(self.policy.metric_specs.generalization),
+                self.policy.generalization,
+            )
+        if self.phase_gate_evaluator is None:
+            self.phase_gate_evaluator = PhaseGateEvaluator(policy=self.policy)
+
+    @classmethod
+    def from_policy_file(cls, path: str) -> "GoodModelBenchmark":
+        return cls(policy=load_policy(path))
+
     def _governance_gate_reasons(self, deployment: Deployment, governance_score: float) -> List[str]:
         profile = deployment.governance_profile
         reasons: List[str] = []
+        gate = self.policy.governance_gate
 
         if profile.is_excluded_use_case:
             reason = profile.exclusion_reason or "Deployment marked as excluded use case."
@@ -129,33 +138,36 @@ class GoodModelBenchmark:
         if (
             profile.data_sensitivity == DataSensitivityTier.CRITICAL
             and profile.external_model_data_retention_days is not None
-            and profile.external_model_data_retention_days > 30
+            and profile.external_model_data_retention_days > gate.critical_max_retention_days
         ):
             reasons.append("Critical data tier requires short external model retention windows.")
 
-        if profile.data_sensitivity in {DataSensitivityTier.HIGH, DataSensitivityTier.CRITICAL} and governance_score < 75:
+        if (
+            profile.data_sensitivity in {DataSensitivityTier.HIGH, DataSensitivityTier.CRITICAL}
+            and governance_score < gate.high_sensitivity_min_governance_score
+        ):
             reasons.append("Governance score below minimum threshold for high-sensitivity deployment.")
 
         return reasons
 
-    @staticmethod
-    def _claim_confidence(evidence_score: float, governance_score: float, blocked: bool) -> str:
+    def _claim_confidence(self, evidence_score: float, governance_score: float, blocked: bool) -> str:
+        confidence_policy = self.policy.claim_confidence
         if blocked:
-            return "VERY LOW"
+            return confidence_policy.blocked_label
 
         confidence = weighted_average(
             [
-                (evidence_score, 0.7),
-                (governance_score, 0.3),
+                (evidence_score, confidence_policy.evidence_weight),
+                (governance_score, confidence_policy.governance_weight),
             ]
         )
-        if confidence >= 80:
-            return "HIGH"
-        if confidence >= 60:
-            return "MODERATE"
-        if confidence >= 40:
-            return "LOW"
-        return "VERY LOW"
+        if confidence >= confidence_policy.high_min:
+            return confidence_policy.high_label
+        if confidence >= confidence_policy.moderate_min:
+            return confidence_policy.moderate_label
+        if confidence >= confidence_policy.low_min:
+            return confidence_policy.low_label
+        return confidence_policy.very_low_label
 
     def run(self, deployment: Deployment) -> BenchmarkReport:
         """Run benchmark for a single deployment."""
@@ -183,16 +195,17 @@ class GoodModelBenchmark:
         capacity_delta_score = evidence_score
         governance_gate_reasons = self._governance_gate_reasons(deployment, governance_score)
         blocked_by_governance = bool(governance_gate_reasons)
+        overall_weights = self.policy.overall_weights
 
         overall_score = round(
             weighted_average(
                 [
-                    (technical_score, 0.22),
-                    (impact_score, 0.18),
-                    (evidence_score, 0.12),
-                    (continuity_score, 0.17),
-                    (generalization_score, 0.13),
-                    (governance_score, 0.18),
+                    (technical_score, overall_weights.technical),
+                    (impact_score, overall_weights.impact),
+                    (evidence_score, overall_weights.evidence),
+                    (continuity_score, overall_weights.continuity),
+                    (generalization_score, overall_weights.generalization),
+                    (governance_score, overall_weights.governance),
                 ]
             ),
             2,
@@ -258,10 +271,11 @@ class GoodModelBenchmark:
         pillar_eval = self.generalization_evaluator.evaluate_group(matching_deployments)
 
         organizations = sorted({dep.organization for dep in matching_deployments})
+        labs = self.policy.labs_candidate
         candidate_for_labs = (
-            pillar_eval.score >= 80
-            and len(matching_deployments) >= 3
-            and len(organizations) >= 2
+            pillar_eval.score >= labs.min_generalization_score
+            and len(matching_deployments) >= labs.min_deployments
+            and len(organizations) >= labs.min_organizations
         )
 
         return GeneralizationReport(
