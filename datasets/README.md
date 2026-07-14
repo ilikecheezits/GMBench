@@ -4,6 +4,9 @@ This folder contains the test cases used to compare systems.
 
 For reviewers, think of each dataset as the benchmark's source of truth.
 
+The dataset is what all workflows are judged against.
+If two workflows get different scores, this dataset is the shared reference that makes that comparison fair.
+
 ## Current dataset
 
 1. Module: food_pantry_intake.py

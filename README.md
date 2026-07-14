@@ -32,6 +32,23 @@ When you run the benchmark:
 4. It ranks systems with configurable weights.
 5. It outputs a leaderboard and diagnostic artifacts.
 
+## What A Workflow Means Here
+
+In this project, a workflow is one complete way to solve the task from input to final output.
+
+For example, a workflow can include:
+
+- Prompting the model
+- Applying rules or cleanup steps
+- Running safety checks
+- Formatting the final JSON output
+
+Why this matters:
+
+- Each workflow is a candidate solution strategy.
+- The benchmark compares workflows to decide which strategy should become the baseline.
+- A higher-ranked workflow is not just "a better prompt"; it is a better end-to-end process.
+
 ## Current Built-In Example
 
 Task:

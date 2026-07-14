@@ -12,6 +12,23 @@ You can use it to answer:
 - What does each option trade off in quality, speed, and cost?
 - Which system should be the baseline for the next phase?
 
+## What "Workflow" Means In This Benchmark
+
+A workflow is one full system approach for handling the task, not just one model call.
+
+Think of it as the full recipe:
+
+1. How input is interpreted
+2. How the model is prompted
+3. What post-processing or safeguards are applied
+4. How final structured output is produced
+
+Why this is important for reviewers:
+
+- The benchmark compares complete approaches, not isolated prompt snippets.
+- A winning workflow is the strongest operational candidate to standardize.
+- Differences in scores reflect process design differences, not only model differences.
+
 ## What this does not give you
 
 This benchmark does not directly measure real-world impact at a nonprofit site.
