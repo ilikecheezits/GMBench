@@ -77,7 +77,7 @@ The benchmark answers:
 
 4. Runner
 
-- Executes a system over dataset examples.
+- Executes a system over dataset examples with bounded concurrency (default 4).
 - Captures output, latency, and runtime errors.
 
 5. Metric
@@ -92,7 +92,7 @@ The benchmark answers:
 
 7. Leaderboard
 
-- Compares multiple systems.
+- Compares multiple systems with bounded concurrency (default 3).
 - Uses caller-provided ranking weights (no hardcoded rank strategy in core).
 
 8. Registry
@@ -112,6 +112,9 @@ Included systems:
 - Food Pantry Intake Workflow A
 - Food Pantry Intake Workflow B
 - Food Pantry Intake Workflow C
+
+Current default model for workflows: gpt-4o-mini.
+Current default judge model: gpt-4o-mini.
 
 Included metrics:
 
@@ -159,6 +162,13 @@ Run the benchmark demo:
 
 ```bash
 python main.py
+```
+
+The project automatically loads a local .env file at startup for provider credentials.
+Minimal real-provider setup:
+
+```bash
+OPENAI_API_KEY=your_key_here
 ```
 
 When API keys are configured, systems use real provider calls automatically.

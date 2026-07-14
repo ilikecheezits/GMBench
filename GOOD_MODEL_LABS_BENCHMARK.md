@@ -29,8 +29,8 @@ When you run python main.py, this is the full flow.
 6. The script creates one dataset, three systems, and a metric suite.
 7. A Benchmark object is created with dataset and metrics.
 8. A Leaderboard object is created with ranking weights.
-9. Leaderboard.rank runs Benchmark.arun for each system.
-10. Benchmark.arun runs the system on every example, computes metrics, writes artifacts, aggregates telemetry, and returns one BenchmarkResult.
+9. Leaderboard.rank runs Benchmark.arun concurrently across systems (default max concurrency 3).
+10. Benchmark.arun runs the system on every example with bounded concurrency (default 4), computes metrics, writes artifacts, aggregates telemetry, and returns one BenchmarkResult.
 11. Leaderboard computes weighted scores, sorts descending, and assigns rank numbers.
 12. reports.leaderboard_to_markdown formats results into the final table printed to terminal.
 
@@ -38,11 +38,11 @@ When you run python main.py, this is the full flow.
 
 For each example in the dataset:
 
-1. Runner starts a timer.
-2. Runner calls await system.run(example).
+1. Runner schedules examples concurrently (up to its max_concurrency limit).
+2. Each task starts a timer and calls await system.run(example).
 3. If system.run succeeds, Runner stores output and latency.
 4. If system.run raises, Runner captures error text and stack trace and creates a fallback empty SystemOutput.
-5. Runner returns ExampleRun objects for all examples.
+5. Runner returns ExampleRun objects in dataset order.
 
 ## What a system output contains
 
@@ -63,6 +63,8 @@ Metric types used in this framework:
 1. Rule-based metrics
 2. Reference-based metrics
 3. LLM-as-a-Judge metrics
+
+LLM judge calls are also parallelized with bounded concurrency (default 4).
 
 The benchmark computes metric values per system across the full dataset.
 
@@ -97,6 +99,11 @@ Systems:
 2. Food Pantry Intake Workflow B
 3. Food Pantry Intake Workflow C
 
+Default model settings:
+
+1. Workflow model: gpt-4o-mini
+2. Judge model: gpt-4o-mini
+
 ## File map by responsibility
 
 Core orchestration:
@@ -129,6 +136,11 @@ Entry points:
 Run benchmark:
 
 1. python main.py
+
+Credential loading:
+
+1. The framework auto-loads .env from the repository root.
+2. Minimum setup for real provider calls: OPENAI_API_KEY=your_key_here
 
 Run tests:
 
