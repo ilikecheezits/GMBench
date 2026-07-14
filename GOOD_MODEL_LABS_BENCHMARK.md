@@ -29,6 +29,38 @@ Why this is important for reviewers:
 - A winning workflow is the strongest operational candidate to standardize.
 - Differences in scores reflect process design differences, not only model differences.
 
+### Concrete Example
+
+Task:
+
+- Convert a free-text food pantry intake note into structured JSON.
+
+Sample input note:
+
+- "Caller Amina Rahman, family of 6, needs groceries and baby formula. Bengali interpreter needed."
+
+What a workflow does step by step:
+
+1. Reads the note.
+2. Identifies key facts (name, size, services, language, urgency).
+3. Applies rules and checks to improve consistency.
+4. Produces a final structured output used for scoring.
+
+Sample output:
+
+```json
+{
+	"client_name": "Amina Rahman",
+	"household_size": 6,
+	"urgency": "high",
+	"requested_services": ["groceries", "baby formula"],
+	"preferred_language": "Bengali",
+	"notes_summary": "High-need household of 6 requesting groceries, baby formula."
+}
+```
+
+This is why workflow comparison matters: different workflows can produce different quality from the same input.
+
 ## What this does not give you
 
 This benchmark does not directly measure real-world impact at a nonprofit site.

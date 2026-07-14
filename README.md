@@ -49,6 +49,34 @@ Why this matters:
 - The benchmark compares workflows to decide which strategy should become the baseline.
 - A higher-ranked workflow is not just "a better prompt"; it is a better end-to-end process.
 
+### Workflow Example (Plain Language)
+
+Input example:
+
+- "Client Maria Lopez called. Family of 4. Needs groceries and diapers. Spanish preferred."
+
+One workflow might do this:
+
+1. Read the note text.
+2. Extract key fields such as name, household size, urgency, language, and requested services.
+3. Apply cleanup rules (for example, fix missing fields or normalize wording).
+4. Return a structured JSON record.
+
+Output example:
+
+```json
+{
+	"client_name": "Maria Lopez",
+	"household_size": 4,
+	"urgency": "high",
+	"requested_services": ["groceries", "diapers"],
+	"preferred_language": "Spanish",
+	"notes_summary": "High-need household of 4 requesting groceries, diapers."
+}
+```
+
+In this repository, Workflow A, B, and C follow this same input/output goal but use different strategies, which is why they score differently.
+
 ## Current Built-In Example
 
 Task:
