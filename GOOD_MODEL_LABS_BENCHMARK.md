@@ -103,6 +103,7 @@ Systems compared:
 - Food Pantry Intake Workflow A
 - Food Pantry Intake Workflow B
 - Food Pantry Intake Workflow C
+- Food Pantry Intake Workflow D
 
 Default model settings:
 
@@ -168,8 +169,14 @@ The current implementation is set up so new workflow variants can be added with 
 
 In practice, adding a new workflow means:
 
-1. Define a new workflow profile with its own prompt style and behavior rules.
-2. Register a new workflow class that points to that profile.
-3. Run the same dataset and compare the new result against the others.
+1. Define a new workflow strategy class with its own prompt style and behavior rules.
+2. Add that strategy to the workflow strategy registry.
+3. Register a new workflow class that points to that strategy.
+4. Run the same dataset and compare the new result against the others.
 
-This makes it easier to test new strategies without rebuilding the full benchmark each time.
+This makes it easier to test new strategies without rebuilding the full benchmark each time, and it avoids locking workflow design into a fixed set of boolean options.
+
+Concrete example now included in the codebase:
+
+1. Workflow D is a recall-heavy strategy.
+2. It was added by defining one new strategy class, registering it in the strategy registry, and adding one small workflow class that points to it.

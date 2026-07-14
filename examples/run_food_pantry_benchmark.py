@@ -23,6 +23,7 @@ def run() -> None:
         SYSTEM_REGISTRY["food_pantry_intake_a"](),
         SYSTEM_REGISTRY["food_pantry_intake_b"](),
         SYSTEM_REGISTRY["food_pantry_intake_c"](),
+        SYSTEM_REGISTRY["food_pantry_intake_d"](),
     ]
 
     metric_names = [

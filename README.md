@@ -93,6 +93,7 @@ Systems:
 - Food Pantry Intake Workflow A
 - Food Pantry Intake Workflow B
 - Food Pantry Intake Workflow C
+- Food Pantry Intake Workflow D
 
 Model defaults:
 
@@ -198,13 +199,18 @@ To add a new benchmarked task:
 
 To add another distinct workflow for an existing task:
 
-1. Add a new profile entry in workflows/food_pantry_intake.py inside WORKFLOW_PROFILES.
-2. Set the behavior you want, such as:
+1. Add a new workflow strategy class in workflows/food_pantry_intake.py.
+2. Give that strategy its own behavior, such as:
 	- prompt style
 	- conservative vs balanced behavior
 	- stronger source-text corrections
 	- optional verification for risky cases
-3. Add a small registered system class that points to that profile.
-4. Re-run the benchmark and compare results.
+3. Add the strategy to the WORKFLOW_STRATEGIES registry.
+4. Add a small registered system class that points to that strategy.
+5. Re-run the benchmark and compare results.
 
-This keeps new workflow variants easy to add without rewriting the whole pipeline.
+This keeps new workflow variants easy to add without rewriting the whole pipeline or being limited to a fixed set of boolean switches.
+
+Example added in this repository:
+
+- Workflow D uses a recall-heavy strategy class to show how a new workflow can be created by adding a new strategy plus a small registered system class.
