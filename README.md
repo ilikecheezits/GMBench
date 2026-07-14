@@ -193,3 +193,18 @@ To add a new benchmarked task:
 3. Register them.
 4. Choose metric set and ranking weights.
 5. Run benchmark and compare results.
+
+## Adding A New Workflow Variant
+
+To add another distinct workflow for an existing task:
+
+1. Add a new profile entry in workflows/food_pantry_intake.py inside WORKFLOW_PROFILES.
+2. Set the behavior you want, such as:
+	- prompt style
+	- conservative vs balanced behavior
+	- stronger source-text corrections
+	- optional verification for risky cases
+3. Add a small registered system class that points to that profile.
+4. Re-run the benchmark and compare results.
+
+This keeps new workflow variants easy to add without rewriting the whole pipeline.

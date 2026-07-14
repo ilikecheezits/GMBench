@@ -161,3 +161,15 @@ If no provider key is available, it falls back to MockProvider for local testing
 Use this framework to choose a technical baseline implementation for a recurring task.
 
 Do not use this framework alone to claim operational impact outcomes.
+
+## How New Workflows Can Be Added
+
+The current implementation is set up so new workflow variants can be added with limited code changes.
+
+In practice, adding a new workflow means:
+
+1. Define a new workflow profile with its own prompt style and behavior rules.
+2. Register a new workflow class that points to that profile.
+3. Run the same dataset and compare the new result against the others.
+
+This makes it easier to test new strategies without rebuilding the full benchmark each time.
