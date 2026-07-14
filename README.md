@@ -1,36 +1,124 @@
 # Good Model Labs Benchmark Framework
 
-This repository benchmarks complete AI systems that solve recurring nonprofit operational tasks.
+This project compares different AI implementations for the same nonprofit task, using the same test data and the same scoring rules.
 
-For a plain-language deep dive, see [GOOD_MODEL_LABS_BENCHMARK.md](GOOD_MODEL_LABS_BENCHMARK.md).
+It is designed for product reviewers, project managers, and technical teams who need a clear answer to:
 
-It does not benchmark nonprofits.
-It does not benchmark deployment outcomes.
+- Which system performs best for this task?
+- What trade-offs do we see in quality, speed, and cost?
 
-The core abstraction is SystemUnderTest.
-A system can be prompt-only, RAG, agentic workflow, parser pipeline, or eventually a fine-tuned model.
+For a fuller walkthrough in plain language, see [GOOD_MODEL_LABS_BENCHMARK.md](GOOD_MODEL_LABS_BENCHMARK.md).
 
-Every benchmarked system implements an async black-box interface:
+## What This Project Is And Is Not
 
-```python
-class SystemUnderTest(ABC):
-	async def run(self, example: BenchmarkExample) -> SystemOutput:
-		...
+This project is:
+
+- A system comparison tool
+- A repeatable evaluation process
+- A way to justify baseline system choices with metrics
+
+This project is not:
+
+- A direct measure of nonprofit real-world outcomes
+- A deployment analytics tool
+
+## Simple Workflow Overview
+
+When you run the benchmark:
+
+1. It loads one dataset for a specific task.
+2. It runs multiple AI systems on the same examples.
+3. It scores outputs with a shared metric set.
+4. It ranks systems with configurable weights.
+5. It outputs a leaderboard and diagnostic artifacts.
+
+## Current Built-In Example
+
+Task:
+
+- Food Pantry Intake Structuring
+
+Dataset:
+
+- ID: food_pantry_intake_v1
+- Size: 5 examples
+
+Systems:
+
+- Food Pantry Intake Workflow A
+- Food Pantry Intake Workflow B
+- Food Pantry Intake Workflow C
+
+Model defaults:
+
+- Workflow model: gpt-4o-mini
+- Judge model: gpt-4o-mini
+
+## Scoring Categories
+
+The framework includes metrics across several themes:
+
+- Quality: accuracy, precision, recall, hallucination_rate
+- Reliability: json_validity, failure_rate
+- Safety and robustness: prompt_injection, pii_leakage, robustness
+- Efficiency: latency_ms, cost_usd, prompt_tokens, completion_tokens
+- Cross-slice consistency: cross_org, cross_language, cross_model
+- Human-like evaluation: llm_judge_quality
+
+## Speed And Concurrency
+
+To reduce benchmark runtime, the framework runs several operations in parallel with safe limits:
+
+- Per-example execution concurrency in Runner: default 4
+- Per-system ranking concurrency in Leaderboard: default 3
+- LLM judge concurrency: default 4
+
+## Setup
+
+The framework auto-loads a local .env file from repository root.
+
+Minimum real-provider setup:
+
+```bash
+OPENAI_API_KEY=your_key_here
 ```
 
-## Design Goal
+Supported provider keys:
 
-Build a reusable benchmark foundation for Good Model Labs, where systems are compared on standardized datasets for recurring tasks.
+- OPENAI_API_KEY
+- ANTHROPIC_API_KEY
+- GOOGLE_API_KEY
 
-Example task:
+If no real provider key is found, the framework uses MockProvider for local testing.
 
-- Food pantry intake note -> structured client JSON
+## Run
 
-The benchmark answers:
+Run benchmark:
 
-- Which implementation performs best on this task?
+```bash
+python main.py
+```
 
-## Architecture
+Run tests:
+
+```bash
+python -m unittest discover -s tests -p "test_*.py"
+```
+
+## Outputs For Reviewers
+
+Primary output:
+
+- Leaderboard table with rank, score, quality, speed, and cost columns
+
+Diagnostics:
+
+- artifacts/traces: step-level execution traces
+- artifacts/failure_logs: detailed failed-example records
+
+These make it easier to explain why a system won or lost.
+
+## Project Structure
 
 ```text
 .
@@ -45,198 +133,18 @@ The benchmark answers:
 ├── reports.py
 ├── registry.py
 ├── workflows/
-│   └── food_pantry_intake.py
 ├── datasets/
-│   └── food_pantry_intake.py
 ├── examples/
-│   └── run_food_pantry_benchmark.py
 ├── tests/
-│   └── test_labs_benchmark.py
 └── main.py
 ```
 
-## Core Concepts
+## Extending To New Tasks
 
-1. SystemUnderTest
+To add a new benchmarked task:
 
-- Black-box task system interface.
-- Benchmark does not assume prompts, agents, or model type.
-
-2. Provider abstraction
-
-- Unified provider interface for OpenAI, Anthropic, Gemini, and Mock.
-- Real API usage when environment keys are present:
-	- OPENAI_API_KEY
-	- ANTHROPIC_API_KEY
-	- GOOGLE_API_KEY
-
-3. BenchmarkDataset
-
-- List of DatasetExample records.
-- Each example includes input_text, ground_truth, metadata.
-
-4. Runner
-
-- Executes a system over dataset examples with bounded concurrency (default 4).
-- Captures output, latency, and runtime errors.
-
-5. Metric
-
-- Pluggable class with a compute(context) method.
-- New metrics can be added without touching core benchmark logic.
-
-6. Benchmark
-
-- Runs Runner + metric evaluator.
-- Returns BenchmarkResult with metric values and failure cases.
-
-7. Leaderboard
-
-- Compares multiple systems with bounded concurrency (default 3).
-- Uses caller-provided ranking weights (no hardcoded rank strategy in core).
-
-8. Registry
-
-- Systems, datasets, and metrics self-register.
-- Automatic discovery via module and package scanning.
-
-## Built-in Example
-
-Included benchmark task:
-
-- Food Pantry Intake Structuring
-- Dataset id: food_pantry_intake_v1 (5 examples)
-
-Included systems:
-
-- Food Pantry Intake Workflow A
-- Food Pantry Intake Workflow B
-- Food Pantry Intake Workflow C
-
-Current default model for workflows: gpt-4o-mini.
-Current default judge model: gpt-4o-mini.
-
-Included metrics:
-
-- accuracy
-- precision
-- recall
-- hallucination_rate
-- json_validity
-- latency_ms
-- cost_usd
-- robustness
-- safety
-- pii_leakage
-- prompt_injection
-- cross_org
-- cross_language
-- cross_model
-- prompt_tokens
-- completion_tokens
-- total_api_calls
-- failure_rate
-- retry_count
-- peak_latency_ms
-- average_call_latency_ms
-- cost_per_success
-- token_efficiency
-- llm_judge_quality
-
-## Evaluator Types
-
-The framework supports three evaluator families:
-
-1. Rule-based evaluators
-- JSON validity, latency, cost, token usage, API call count, failure rate.
-
-2. Reference-based evaluators
-- Accuracy, precision, recall, hallucination, robustness, cross-org/language/model.
-
-3. LLM-as-a-Judge evaluators
-- Rubric-based quality scoring for tasks where exact matching is insufficient.
-
-## Quick Start
-
-Run the benchmark demo:
-
-```bash
-python main.py
-```
-
-The project automatically loads a local .env file at startup for provider credentials.
-Minimal real-provider setup:
-
-```bash
-OPENAI_API_KEY=your_key_here
-```
-
-When API keys are configured, systems use real provider calls automatically.
-Without keys, the framework falls back to MockProvider for local testing.
-
-Run tests:
-
-```bash
-python -m unittest discover -s tests -p "test_*.py"
-```
-
-## Programmatic Usage
-
-```python
-import metrics  # ensures built-in metrics register
-from benchmark import Benchmark
-from leaderboard import Leaderboard
-from registry import (
-	DATASET_REGISTRY,
-	SYSTEM_REGISTRY,
-	build_metric_suite,
-	discover_package_modules,
-)
-
-discover_package_modules("datasets")
-discover_package_modules("workflows")
-
-dataset = DATASET_REGISTRY["food_pantry_intake_v1"]()
-systems = [
-	SYSTEM_REGISTRY["food_pantry_intake_a"](),
-	SYSTEM_REGISTRY["food_pantry_intake_b"](),
-	SYSTEM_REGISTRY["food_pantry_intake_c"](),
-]
-
-metrics = build_metric_suite(["accuracy", "json_validity", "hallucination_rate", "latency_ms", "cost_usd"])
-benchmark = Benchmark(dataset=dataset, metrics=metrics)
-
-leaderboard = Leaderboard(
-	benchmark=benchmark,
-	ranking_weights={"accuracy": 0.7, "json_validity": 0.2, "cost_usd": -0.1},
-)
-
-rankings = leaderboard.rank(systems)
-```
-
-## Telemetry, Traces, and Failure Logs
-
-Each run automatically records telemetry fields such as:
-
-1. Total API calls
-2. Prompt and completion tokens
-3. Total, average, and peak latency
-4. Retry count
-5. Provider/model/temperature/context length
-6. Total cost and cost-per-success
-7. Failures and rate-limit events
-
-Artifacts are saved under artifacts/:
-
-1. traces/: serialized step-by-step execution traces for all evaluated examples
-2. failure_logs/: failed-example logs with input, expected, actual, prompts, model responses, intermediate outputs, and stack traces
-
-## Extending to New Benchmarks
-
-To add a new benchmark (Grant Reporting, Missed Call Triage, Knowledge Retrieval, etc):
-
-1. Add a dataset module under datasets.
-2. Add one or more system modules under workflows.
-3. Register systems and dataset with decorators.
-4. Add task-specific metrics if needed.
-5. Run through Benchmark + Leaderboard without changing core benchmark code.
+1. Add a dataset module in datasets.
+2. Add one or more system modules in workflows.
+3. Register them.
+4. Choose metric set and ranking weights.
+5. Run benchmark and compare results.

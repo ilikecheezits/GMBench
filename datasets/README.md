@@ -1,27 +1,24 @@
 # Datasets
 
-This directory contains benchmark dataset modules used by the evaluation framework.
+This folder contains the test cases used to compare systems.
 
-## Current dataset modules
+For reviewers, think of each dataset as the benchmark's source of truth.
 
-1. food_pantry_intake.py
+## Current dataset
 
-Registered dataset id:
+1. Module: food_pantry_intake.py
+2. Dataset ID: food_pantry_intake_v1
 
-1. food_pantry_intake_v1
+## What each example contains
 
-## Dataset contract
+1. id: unique case identifier
+2. input_text: the raw task input
+3. ground_truth: the expected structured answer
+4. metadata: tags for slicing and analysis
 
-Each dataset module should register a builder with register_dataset and return a BenchmarkDataset.
+## Why metadata matters
 
-Each example should provide:
-
-1. id
-2. input_text
-3. ground_truth
-4. metadata
-
-Common metadata keys used by built-in metrics include:
+Metadata allows reporting by segment, such as:
 
 1. organization
 2. language
@@ -29,8 +26,8 @@ Common metadata keys used by built-in metrics include:
 4. prompt_injection
 5. reference_model
 
-## Notes
+## Data quality expectations
 
-1. Keep examples anonymized and safe for local development.
-2. Prefer deterministic, reviewable ground-truth outputs.
-3. Add new dataset modules in this folder and register them so discovery can load them.
+1. Keep examples anonymized and safe.
+2. Keep ground truth consistent and reviewable.
+3. Add new datasets in this folder and register them so the benchmark can discover them.
