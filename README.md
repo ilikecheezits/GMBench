@@ -214,3 +214,38 @@ This keeps new workflow variants easy to add without rewriting the whole pipelin
 Example added in this repository:
 
 - Workflow D uses a recall-heavy strategy class to show how a new workflow can be created by adding a new strategy plus a small registered system class.
+
+### Primary WorkflowStrategy Methods
+
+When creating a new workflow strategy, these are the main methods to understand:
+
+1. system_prompt()
+	Defines the active system instructions sent to the model.
+
+2. llm_prompt(safe_input)
+	Builds the user-side task prompt from the input text.
+
+3. sanitize_input(text)
+	Lets the workflow clean or transform raw input before model use.
+
+4. normalize_output(system, parsed, safe_input)
+	Main post-processing hook. Turns model output into the final structured result.
+
+5. fallback_output(system, safe_input)
+	Defines what to return if the model call fails.
+
+6. should_verify(system, safe_input, merged)
+	Decides whether to run an extra review or repair pass.
+
+7. verification_prompt(safe_input, merged)
+	Builds the prompt for that review or repair pass.
+
+8. verification_system_prompt()
+	Defines the system instructions for the verification step.
+
+In practice, the most important methods for making a workflow truly distinct are usually:
+
+1. system_prompt()
+2. llm_prompt(...)
+3. normalize_output(...)
+4. should_verify(...)

@@ -180,3 +180,38 @@ Concrete example now included in the codebase:
 
 1. Workflow D is a recall-heavy strategy.
 2. It was added by defining one new strategy class, registering it in the strategy registry, and adding one small workflow class that points to it.
+
+## Primary WorkflowStrategy Methods
+
+For teams adding a new workflow, these are the main strategy methods that shape behavior:
+
+1. system_prompt()
+	Controls the active system instructions given to the model.
+
+2. llm_prompt(safe_input)
+	Controls how the actual task request is presented to the model.
+
+3. sanitize_input(text)
+	Controls any cleanup or filtering before the model sees the input.
+
+4. normalize_output(system, parsed, safe_input)
+	Controls how raw model output is turned into the final structured answer.
+
+5. fallback_output(system, safe_input)
+	Controls what the workflow returns if the model call fails.
+
+6. should_verify(system, safe_input, merged)
+	Controls whether the workflow performs an extra review or repair pass.
+
+7. verification_prompt(safe_input, merged)
+	Controls the prompt used for that extra review or repair pass.
+
+8. verification_system_prompt()
+	Controls the system instructions used during the review step.
+
+Most workflow differences come from changing:
+
+1. system_prompt()
+2. llm_prompt(...)
+3. normalize_output(...)
+4. should_verify(...)
