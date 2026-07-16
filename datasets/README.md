@@ -7,10 +7,14 @@ For reviewers, think of each dataset as the benchmark's source of truth.
 The dataset is what all workflows are judged against.
 If two workflows get different scores, this dataset is the shared reference that makes that comparison fair.
 
-## Current dataset
+## Current datasets
 
-1. Module: food_pantry_intake.py
-2. Dataset ID: food_pantry_intake_v1
+1. Module: nonprofit_tool_matching.py
+2. Dataset ID: nonprofit_tool_matching_v1
+3. Focus: nonprofit AI tool/package recommendation with multilingual and high-risk coverage
+4. Module: food_pantry_intake.py
+5. Dataset ID: food_pantry_intake_v1
+6. Focus: pantry intake structuring from free text
 
 ## What each example contains
 
@@ -28,6 +32,12 @@ Metadata allows reporting by segment, such as:
 3. difficulty
 4. prompt_injection
 5. reference_model
+
+For the nonprofit tool matching track, metadata is especially important for:
+
+1. cross-language consistency checks
+2. high-risk scenario robustness checks
+3. organization-level fairness checks
 
 ## Data quality expectations
 

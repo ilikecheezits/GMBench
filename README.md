@@ -77,11 +77,27 @@ Output example:
 
 In this repository, Workflow A, B, and C follow this same input/output goal but use different strategies, which is why they score differently.
 
-## Current Built-In Example
+## Current Built-In Tracks
 
-Task:
+This repository now includes two benchmark tracks.
 
-- Food Pantry Intake Structuring
+1. Nonprofit AI Tool Matching (default)
+2. Food Pantry Intake Structuring
+
+### Track: Nonprofit AI Tool Matching
+
+Dataset:
+
+- ID: nonprofit_tool_matching_v1
+- Includes multilingual and high-risk scenarios
+
+Systems:
+
+- Nonprofit Tool Matcher Balanced
+- Nonprofit Tool Matcher Budget
+- Nonprofit Tool Matcher Expansive
+
+### Track: Food Pantry Intake Structuring
 
 Dataset:
 
@@ -137,6 +153,14 @@ Supported provider keys:
 
 If no real provider key is found, the framework uses MockProvider for local testing.
 
+## Model Policy (Zero-Shot)
+
+This benchmark is configured for plain vanilla, zero-shot model evaluation.
+
+- No fine-tuned model identifiers should be used.
+- Provider calls run with deterministic settings (temperature 0.0).
+- If a fine-tuned model name is passed, provider validation rejects it.
+
 ## Run
 
 Run benchmark:
@@ -144,6 +168,16 @@ Run benchmark:
 ```bash
 python main.py
 ```
+
+Run a specific track:
+
+```bash
+python main.py --track nonprofit_tool_matching
+python main.py --track food_pantry
+python main.py --track all
+```
+
+Note: the default track is `nonprofit_tool_matching`.
 
 Run tests:
 
@@ -184,6 +218,11 @@ These make it easier to explain why a system won or lost.
 ├── tests/
 └── main.py
 ```
+
+Track-specific entrypoints:
+
+- examples/run_nonprofit_tool_matching_benchmark.py
+- examples/run_food_pantry_benchmark.py
 
 ## Extending To New Tasks
 

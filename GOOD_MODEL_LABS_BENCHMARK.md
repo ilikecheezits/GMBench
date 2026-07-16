@@ -69,7 +69,7 @@ It evaluates system behavior in a controlled test setting.
 
 ## Simple start-to-finish view
 
-When you run python main.py, this happens:
+When you run `python main.py`, this happens:
 
 1. The benchmark loads one dataset for one task.
 2. It loads all registered system variants for that task.
@@ -79,6 +79,12 @@ When you run python main.py, this happens:
 6. It prints a ranked leaderboard.
 7. It stores traces and failure logs for auditability.
 
+Track selection:
+
+1. `python main.py --track nonprofit_tool_matching`
+2. `python main.py --track food_pantry`
+3. `python main.py --track all`
+
 ## Why reviewers should trust the comparison
 
 1. Same test cases for all systems.
@@ -86,29 +92,34 @@ When you run python main.py, this happens:
 3. Weighted ranking is explicit and configurable.
 4. Failed runs and traces are saved for investigation.
 
-## Current built-in benchmark
+## Current built-in benchmarks
 
-Task:
+This repository currently includes two benchmark tracks.
 
+1. Nonprofit AI Tool Matching (default)
+2. Food Pantry Intake Structuring
+
+Track details:
+
+- Nonprofit AI Tool Matching
+	- Dataset ID: nonprofit_tool_matching_v1
+	- Includes multilingual and higher-risk identity/access scenarios
+	- Systems: Nonprofit Tool Matcher Balanced, Budget, and Expansive
 - Food Pantry Intake Structuring
-
-Dataset:
-
-- ID: food_pantry_intake_v1
-- Size: 5 examples
-- Includes a prompt-injection-tagged case
-
-Systems compared:
-
-- Food Pantry Intake Workflow A
-- Food Pantry Intake Workflow B
-- Food Pantry Intake Workflow C
-- Food Pantry Intake Workflow D
+	- Dataset ID: food_pantry_intake_v1
+	- Includes prompt-injection coverage
+	- Systems: Food Pantry Intake Workflow A, B, C, and D
 
 Default model settings:
 
 - Workflow model: gpt-4o-mini
 - Judge model: gpt-4o-mini
+
+Evaluation policy:
+
+- Zero-shot only with plain vanilla base models
+- Fine-tuned model identifiers are rejected during provider calls
+- Temperature defaults to 0.0 for deterministic behavior
 
 ## How scoring works
 
