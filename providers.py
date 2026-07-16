@@ -59,6 +59,16 @@ class BaseProvider:
         raise NotImplementedError
 
 
+def _validate_vanilla_model_name(model: str) -> None:
+    model_name = (model or "").strip().lower()
+    fine_tuned_markers = ("ft:", "fine-tuned", "finetuned", ":ft-")
+    if any(marker in model_name for marker in fine_tuned_markers):
+        raise ValueError(
+            "Fine-tuned model identifiers are not allowed in this benchmark. "
+            "Use a plain vanilla base model for zero-shot evaluation."
+        )
+
+
 class OpenAIProvider(BaseProvider):
     provider_name = "openai"
 
@@ -75,6 +85,7 @@ class OpenAIProvider(BaseProvider):
         temperature: float = 0.0,
         max_tokens: int = 800,
     ) -> ProviderResponse:
+        _validate_vanilla_model_name(model)
         payload = {
             "model": model,
             "messages": messages,
@@ -129,6 +140,7 @@ class AnthropicProvider(BaseProvider):
         temperature: float = 0.0,
         max_tokens: int = 800,
     ) -> ProviderResponse:
+        _validate_vanilla_model_name(model)
         merged = "\n".join(f"{msg.get('role', 'user')}: {msg.get('content', '')}" for msg in messages)
         payload = {
             "model": model,
@@ -189,6 +201,7 @@ class GeminiProvider(BaseProvider):
         temperature: float = 0.0,
         max_tokens: int = 800,
     ) -> ProviderResponse:
+        _validate_vanilla_model_name(model)
         merged = "\n".join(msg.get("content", "") for msg in messages)
         payload = {
             "contents": [{"parts": [{"text": merged}]}],
@@ -252,6 +265,7 @@ class MockProvider(BaseProvider):
         temperature: float = 0.0,
         max_tokens: int = 800,
     ) -> ProviderResponse:
+        _validate_vanilla_model_name(model)
         merged = "\n".join(msg.get("content", "") for msg in messages)
 
         if "Return JSON: {\"score\": <float>" in merged:
