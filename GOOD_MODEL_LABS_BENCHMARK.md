@@ -61,6 +61,46 @@ Sample output:
 
 This is why workflow comparison matters: different workflows can produce different quality from the same input.
 
+### Track-Specific Input And Output Examples
+
+#### Nonprofit AI Tool Matching
+
+Sample input:
+
+- "Budget: $80. Need help with volunteer scheduling. Data sensitivity: low. Main pain point: volunteers miss shifts."
+
+Sample output:
+
+```json
+{
+	"recommended_package": "volunteer_coordination_basic",
+	"primary_tool_category": "volunteer_coordination",
+	"activation_horizon_days": 14,
+	"estimated_monthly_cost_usd": 48,
+	"risk_level": "low",
+	"success_metric": "volunteer_shift_fill_rate"
+}
+```
+
+#### Food Pantry Intake Structuring
+
+Sample input:
+
+- "Caller Amina Rahman, family of 6, needs groceries and baby formula. Bengali interpreter needed."
+
+Sample output:
+
+```json
+{
+	"client_name": "Amina Rahman",
+	"household_size": 6,
+	"urgency": "high",
+	"requested_services": ["groceries", "baby formula"],
+	"preferred_language": "Bengali",
+	"notes_summary": "High-need household of 6 requesting groceries, baby formula."
+}
+```
+
 ## What this does not give you
 
 This benchmark does not directly measure real-world impact at a nonprofit site.

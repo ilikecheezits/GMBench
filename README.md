@@ -111,6 +111,46 @@ Systems:
 - Food Pantry Intake Workflow C
 - Food Pantry Intake Workflow D
 
+## Input And Output Shapes By Track
+
+### Nonprofit AI Tool Matching
+
+Input example:
+
+- "Organization needs volunteer scheduling support, monthly budget: $60, data sensitivity: low, main pain point: volunteer no-shows."
+
+Expected output example:
+
+```json
+{
+	"recommended_package": "volunteer_coordination_basic",
+	"primary_tool_category": "volunteer_coordination",
+	"activation_horizon_days": 14,
+	"estimated_monthly_cost_usd": 48,
+	"risk_level": "low",
+	"success_metric": "volunteer_shift_fill_rate"
+}
+```
+
+### Food Pantry Intake Structuring
+
+Input example:
+
+- "Caller Amina Rahman, family of 6, needs groceries and baby formula. Bengali interpreter needed."
+
+Expected output example:
+
+```json
+{
+	"client_name": "Amina Rahman",
+	"household_size": 6,
+	"urgency": "high",
+	"requested_services": ["groceries", "baby formula"],
+	"preferred_language": "Bengali",
+	"notes_summary": "High-need household of 6 requesting groceries, baby formula."
+}
+```
+
 Model defaults:
 
 - Workflow model: gpt-4o-mini
