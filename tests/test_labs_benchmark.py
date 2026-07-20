@@ -67,6 +67,19 @@ class LabsBenchmarkTests(unittest.TestCase):
         self.assertEqual(rankings[0].rank, 1)
         self.assertGreaterEqual(rankings[0].score, rankings[-1].score)
 
+    def test_nonprofit_tool_matching_benchmark_runs(self) -> None:
+        dataset = DATASET_REGISTRY["nonprofit_tool_matching_v1"]()
+        metrics = build_metric_suite(["accuracy", "json_validity", "cost_usd", "failure_rate"])
+        benchmark = Benchmark(dataset=dataset, metrics=metrics)
+
+        result = benchmark.run(SYSTEM_REGISTRY["nonprofit_tool_matcher_balanced"]())
+
+        self.assertEqual(result.dataset_name, "nonprofit_tool_matching_v1")
+        self.assertIn("accuracy", result.metrics)
+        self.assertIn("json_validity", result.metrics)
+        self.assertIn("failure_rate", result.metrics)
+        self.assertTrue(Path(result.trace_path).exists())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -77,11 +77,27 @@ Output example:
 
 In this repository, Workflow A, B, and C follow this same input/output goal but use different strategies, which is why they score differently.
 
-## Current Built-In Example
+## Current Built-In Tracks
 
-Task:
+This repository now includes two benchmark tracks.
 
-- Food Pantry Intake Structuring
+1. Nonprofit AI Tool Matching (default)
+2. Food Pantry Intake Structuring
+
+### Track: Nonprofit AI Tool Matching
+
+Dataset:
+
+- ID: nonprofit_tool_matching_v1
+- Includes multilingual and high-risk scenarios
+
+Systems:
+
+- Nonprofit Tool Matcher Balanced
+- Nonprofit Tool Matcher Budget
+- Nonprofit Tool Matcher Expansive
+
+### Track: Food Pantry Intake Structuring
 
 Dataset:
 
@@ -94,6 +110,46 @@ Systems:
 - Food Pantry Intake Workflow B
 - Food Pantry Intake Workflow C
 - Food Pantry Intake Workflow D
+
+## Input And Output Shapes By Track
+
+### Nonprofit AI Tool Matching
+
+Input example:
+
+- "Organization needs volunteer scheduling support, monthly budget: $60, data sensitivity: low, main pain point: volunteer no-shows."
+
+Expected output example:
+
+```json
+{
+	"recommended_package": "volunteer_coordination_basic",
+	"primary_tool_category": "volunteer_coordination",
+	"activation_horizon_days": 14,
+	"estimated_monthly_cost_usd": 48,
+	"risk_level": "low",
+	"success_metric": "volunteer_shift_fill_rate"
+}
+```
+
+### Food Pantry Intake Structuring
+
+Input example:
+
+- "Caller Amina Rahman, family of 6, needs groceries and baby formula. Bengali interpreter needed."
+
+Expected output example:
+
+```json
+{
+	"client_name": "Amina Rahman",
+	"household_size": 6,
+	"urgency": "high",
+	"requested_services": ["groceries", "baby formula"],
+	"preferred_language": "Bengali",
+	"notes_summary": "High-need household of 6 requesting groceries, baby formula."
+}
+```
 
 Model defaults:
 
@@ -137,6 +193,14 @@ Supported provider keys:
 
 If no real provider key is found, the framework uses MockProvider for local testing.
 
+## Model Policy (Zero-Shot)
+
+This benchmark is configured for plain vanilla, zero-shot model evaluation.
+
+- No fine-tuned model identifiers should be used.
+- Provider calls run with deterministic settings (temperature 0.0).
+- If a fine-tuned model name is passed, provider validation rejects it.
+
 ## Run
 
 Run benchmark:
@@ -144,6 +208,16 @@ Run benchmark:
 ```bash
 python main.py
 ```
+
+Run a specific track:
+
+```bash
+python main.py --track nonprofit_tool_matching
+python main.py --track food_pantry
+python main.py --track all
+```
+
+Note: the default track is `nonprofit_tool_matching`.
 
 Run tests:
 
@@ -184,6 +258,11 @@ These make it easier to explain why a system won or lost.
 ├── tests/
 └── main.py
 ```
+
+Track-specific entrypoints:
+
+- examples/run_nonprofit_tool_matching_benchmark.py
+- examples/run_food_pantry_benchmark.py
 
 ## Extending To New Tasks
 
