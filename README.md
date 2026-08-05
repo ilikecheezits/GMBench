@@ -1,330 +1,139 @@
-# Good Model Labs Benchmark Framework
+# Nonprofit LLM Benchmark (inspect_ai)
 
-This project compares different AI implementations for the same nonprofit task, using the same test data and the same scoring rules.
+This repository runs a nonprofit-focused LLM-vs-LLM benchmark using inspect_ai.
 
-It is designed for product reviewers, project managers, and technical teams who need a clear answer to:
+## What It Measures
 
-- Which system performs best for this task?
-- What trade-offs do we see in quality, speed, and cost?
+- Practical strategy quality on nonprofit tasks
+- Deterministic objective rubric checks
+- Strict LLM-judge rubric checks
+- Hybrid score that combines objective and judge signals
 
-For a fuller walkthrough in plain language, see [GOOD_MODEL_LABS_BENCHMARK.md](GOOD_MODEL_LABS_BENCHMARK.md).
+Current task domains in [inspect_benchmark/nonprofit/task_bank.py](inspect_benchmark/nonprofit/task_bank.py):
 
-## What This Project Is And Is Not
+- fundraising_strategy
+- grant_writing
+- operations_prioritization
+- community_communications
+- impact_measurement
+- board_governance
+- compliance_and_privacy
 
-This project is:
+## Scoring Model
 
-- A system comparison tool
-- A repeatable evaluation process
-- A way to justify baseline system choices with metrics
+Task definitions are in [inspect_benchmark/nonprofit/tasks.py](inspect_benchmark/nonprofit/tasks.py).
 
-This project is not:
+- Judge scorer: model_graded_qa (strict C/P/I instructions)
+- Objective scorer: deterministic rubric checks in [inspect_benchmark/nonprofit/objective_metrics.py](inspect_benchmark/nonprofit/objective_metrics.py)
+- Hybrid score in [inspect_benchmark/nonprofit/leaderboard.py](inspect_benchmark/nonprofit/leaderboard.py):
+	- objective weight: 0.65
+	- judge weight: 0.35
 
-- A direct measure of nonprofit real-world outcomes
-- A deployment analytics tool
-
-## Simple Workflow Overview
-
-When you run the benchmark:
-
-1. It loads one dataset for a specific task.
-2. It runs multiple AI systems on the same examples.
-3. It scores outputs with a shared metric set.
-4. It ranks systems with configurable weights.
-5. It outputs a leaderboard and diagnostic artifacts.
-
-## What A Workflow Means Here
-
-In this project, a workflow is one complete way to solve the task from input to final output.
-
-For example, a workflow can include:
-
-- Prompting the model
-- Applying rules or cleanup steps
-- Running safety checks
-- Formatting the final JSON output
-
-Why this matters:
-
-- Each workflow is a candidate solution strategy.
-- The benchmark compares workflows to decide which strategy should become the baseline.
-- A higher-ranked workflow is not just "a better prompt"; it is a better end-to-end process.
-
-### Workflow Example (Plain Language)
-
-Input example:
-
-- "Client Maria Lopez called. Family of 4. Needs groceries and diapers. Spanish preferred."
-
-One workflow might do this:
-
-1. Read the note text.
-2. Extract key fields such as name, household size, urgency, language, and requested services.
-3. Apply cleanup rules (for example, fix missing fields or normalize wording).
-4. Return a structured JSON record.
-
-Output example:
-
-```json
-{
-	"client_name": "Maria Lopez",
-	"household_size": 4,
-	"urgency": "high",
-	"requested_services": ["groceries", "diapers"],
-	"preferred_language": "Spanish",
-	"notes_summary": "High-need household of 4 requesting groceries, diapers."
-}
-```
-
-In this repository, Workflow A, B, and C follow this same input/output goal but use different strategies, which is why they score differently.
-
-## Current Built-In Tracks
-
-This repository now includes two benchmark tracks.
-
-1. Nonprofit AI Tool Matching (default)
-2. Food Pantry Intake Structuring
-
-### Track: Nonprofit AI Tool Matching
-
-Dataset:
-
-- ID: nonprofit_tool_matching_v1
-- Includes multilingual and high-risk scenarios
-
-Systems:
-
-- Nonprofit Tool Matcher Balanced
-- Nonprofit Tool Matcher Budget
-- Nonprofit Tool Matcher Expansive
-
-### Track: Food Pantry Intake Structuring
-
-Dataset:
-
-- ID: food_pantry_intake_v1
-- Size: 5 examples
-
-Systems:
-
-- Food Pantry Intake Workflow A
-- Food Pantry Intake Workflow B
-- Food Pantry Intake Workflow C
-- Food Pantry Intake Workflow D
-
-## Input And Output Shapes By Track
-
-### Nonprofit AI Tool Matching
-
-Input example:
-
-- "Organization needs volunteer scheduling support, monthly budget: $60, data sensitivity: low, main pain point: volunteer no-shows."
-
-Expected output example:
-
-```json
-{
-	"recommended_package": "volunteer_coordination_basic",
-	"primary_tool_category": "volunteer_coordination",
-	"activation_horizon_days": 14,
-	"estimated_monthly_cost_usd": 48,
-	"risk_level": "low",
-	"success_metric": "volunteer_shift_fill_rate"
-}
-```
-
-### Food Pantry Intake Structuring
-
-Input example:
-
-- "Caller Amina Rahman, family of 6, needs groceries and baby formula. Bengali interpreter needed."
-
-Expected output example:
-
-```json
-{
-	"client_name": "Amina Rahman",
-	"household_size": 6,
-	"urgency": "high",
-	"requested_services": ["groceries", "baby formula"],
-	"preferred_language": "Bengali",
-	"notes_summary": "High-need household of 6 requesting groceries, baby formula."
-}
-```
-
-Model defaults:
-
-- Workflow model: gpt-4o-mini
-- Judge model: gpt-4o-mini
-
-## Scoring Categories
-
-The framework includes metrics across several themes:
-
-- Quality: accuracy, precision, recall, hallucination_rate
-- Reliability: json_validity, failure_rate
-- Safety and robustness: prompt_injection, pii_leakage, robustness
-- Efficiency: latency_ms, cost_usd, prompt_tokens, completion_tokens
-- Cross-slice consistency: cross_org, cross_language, cross_model
-- Human-like evaluation: llm_judge_quality
-
-## Speed And Concurrency
-
-To reduce benchmark runtime, the framework runs several operations in parallel with safe limits:
-
-- Per-example execution concurrency in Runner: default 4
-- Per-system ranking concurrency in Leaderboard: default 3
-- LLM judge concurrency: default 4
-
-## Setup
-
-The framework auto-loads a local .env file from repository root.
-
-Minimum real-provider setup:
+## Install
 
 ```bash
-OPENAI_API_KEY=your_key_here
+pip install -r requirements.txt
 ```
 
-Supported provider keys:
-
-- OPENAI_API_KEY
-- ANTHROPIC_API_KEY
-- GOOGLE_API_KEY
-
-If no real provider key is found, the framework uses MockProvider for local testing.
-
-## Model Policy (Zero-Shot)
-
-This benchmark is configured for plain vanilla, zero-shot model evaluation.
-
-- No fine-tuned model identifiers should be used.
-- Provider calls run with deterministic settings (temperature 0.0).
-- If a fine-tuned model name is passed, provider validation rejects it.
-
-## Run
-
-Run benchmark:
+Set credentials as needed:
 
 ```bash
-python main.py
+export OPENAI_API_KEY=...
 ```
 
-Run a specific track:
+## Run Benchmark
+
+OpenAI budget comparison example:
 
 ```bash
-python main.py --track nonprofit_tool_matching
-python main.py --track food_pantry
-python main.py --track all
+python main.py run \
+	--models openai/gpt-4.1-nano,openai/gpt-4.1-mini \
+	--tasks fundraising,grants,operations,communications,impact,governance,compliance \
+	--judge-model openai/gpt-4.1-mini \
+	--log-dir logs/nonprofit_llm_benchmark_budget_compare
 ```
 
-Note: the default track is `nonprofit_tool_matching`.
+## Start-To-Finish Example Workflow
 
-Run tests:
+This is the exact lifecycle for one benchmark run.
+
+1. You run the CLI command.
 
 ```bash
-python -m unittest discover -s tests -p "test_*.py"
+python main.py run \
+	--models openai/gpt-4.1-nano,openai/gpt-4.1-mini \
+	--tasks fundraising,grants,operations,communications,impact,governance,compliance \
+	--judge-model openai/gpt-4.1-mini \
+	--log-dir logs/nonprofit_llm_benchmark_budget_compare
 ```
 
-## Outputs For Reviewers
+2. Task loading happens from [inspect_benchmark/nonprofit/task_bank.py](inspect_benchmark/nonprofit/task_bank.py).
 
-Primary output:
+- Each sample includes prompt, criterion, reference_answer, difficulty, language, and risk level metadata.
 
-- Leaderboard table with rank, score, quality, speed, and cost columns
+3. For each sample and each model, two scorers run.
 
-Diagnostics:
+- Judge scorer in [inspect_benchmark/nonprofit/tasks.py](inspect_benchmark/nonprofit/tasks.py): returns C/P/I.
+- Objective scorer in [inspect_benchmark/nonprofit/objective_metrics.py](inspect_benchmark/nonprofit/objective_metrics.py): deterministic checklist score from 0 to 1.
 
-- artifacts/traces: step-level execution traces
-- artifacts/failure_logs: detailed failed-example records
+4. Hybrid score is computed per sample.
 
-These make it easier to explain why a system won or lost.
+- Hybrid = 0.65 * objective + 0.35 * judge_numeric
+- Judge numeric mapping: C=1.0, P=0.5, I=0.0
+- Aggregation is implemented in [inspect_benchmark/nonprofit/leaderboard.py](inspect_benchmark/nonprofit/leaderboard.py).
 
-## Project Structure
+5. Raw logs are written by inspect_ai.
 
-```text
-.
-├── benchmark.py
-├── runner.py
-├── workflow.py
-├── providers.py
-├── dataset.py
-├── metrics.py
-├── evaluators.py
-├── leaderboard.py
-├── reports.py
-├── registry.py
-├── workflows/
-├── datasets/
-├── examples/
-├── tests/
-└── main.py
+- Directory: [logs/nonprofit_llm_benchmark_budget_compare](logs/nonprofit_llm_benchmark_budget_compare)
+- These logs contain model outputs, scorer values, metadata slices, and usage/timing data.
+
+6. You generate reports from those logs.
+
+```bash
+python main.py leaderboard \
+	--log-dir logs/nonprofit_llm_benchmark_budget_compare \
+	--output artifacts/nonprofit_llm_leaderboard_budget_compare.md
+
+python main.py task-scores \
+	--log-dir logs/nonprofit_llm_benchmark_budget_compare \
+	--output artifacts/nonprofit_task_scores_budget_compare.md
 ```
 
-Track-specific entrypoints:
+7. You review results at two levels.
 
-- examples/run_nonprofit_tool_matching_benchmark.py
-- examples/run_food_pantry_benchmark.py
+- Overall rank report: [artifacts/nonprofit_llm_leaderboard_budget_compare.md](artifacts/nonprofit_llm_leaderboard_budget_compare.md)
+- Slice-level report (task/language/risk/difficulty): [artifacts/nonprofit_task_scores_budget_compare.md](artifacts/nonprofit_task_scores_budget_compare.md)
 
-## Extending To New Tasks
+This gives an auditable, repeatable loop from prompts to rubric grades to final ranking.
 
-To add a new benchmarked task:
+## Generate Reports
 
-1. Add a dataset module in datasets.
-2. Add one or more system modules in workflows.
-3. Register them.
-4. Choose metric set and ranking weights.
-5. Run benchmark and compare results.
+Overall leaderboard:
 
-## Adding A New Workflow Variant
+```bash
+python main.py leaderboard \
+	--log-dir logs/nonprofit_llm_benchmark_budget_compare \
+	--output artifacts/nonprofit_llm_leaderboard_budget_compare.md
+```
 
-To add another distinct workflow for an existing task:
+Task-level breakdown:
 
-1. Add a new workflow strategy class in workflows/food_pantry_intake.py.
-2. Give that strategy its own behavior, such as:
-	- prompt style
-	- conservative vs balanced behavior
-	- stronger source-text corrections
-	- optional verification for risky cases
-3. Add the strategy to the WORKFLOW_STRATEGIES registry.
-4. Add a small registered system class that points to that strategy.
-5. Re-run the benchmark and compare results.
+```bash
+python main.py task-scores \
+	--log-dir logs/nonprofit_llm_benchmark_budget_compare \
+	--output artifacts/nonprofit_task_scores_budget_compare.md
+```
 
-This keeps new workflow variants easy to add without rewriting the whole pipeline or being limited to a fixed set of boolean switches.
+## Repository Layout
 
-Example added in this repository:
+- [main.py](main.py): CLI (`run`, `leaderboard`, `task-scores`)
+- [inspect_benchmark/nonprofit/run_eval_set.py](inspect_benchmark/nonprofit/run_eval_set.py): inspect eval_set execution
+- [inspect_benchmark/nonprofit/task_bank.py](inspect_benchmark/nonprofit/task_bank.py): benchmark samples
+- [inspect_benchmark/nonprofit/tasks.py](inspect_benchmark/nonprofit/tasks.py): task wiring and judge prompt
+- [inspect_benchmark/nonprofit/objective_metrics.py](inspect_benchmark/nonprofit/objective_metrics.py): deterministic objective rubric scorer
+- [inspect_benchmark/nonprofit/leaderboard.py](inspect_benchmark/nonprofit/leaderboard.py): leaderboard + task-score aggregation
 
-- Workflow D uses a recall-heavy strategy class to show how a new workflow can be created by adding a new strategy plus a small registered system class.
+## Notes
 
-### Primary WorkflowStrategy Methods
-
-When creating a new workflow strategy, these are the main methods to understand:
-
-1. system_prompt()
-	Defines the active system instructions sent to the model.
-
-2. llm_prompt(safe_input)
-	Builds the user-side task prompt from the input text.
-
-3. sanitize_input(text)
-	Lets the workflow clean or transform raw input before model use.
-
-4. normalize_output(system, parsed, safe_input)
-	Main post-processing hook. Turns model output into the final structured result.
-
-5. fallback_output(system, safe_input)
-	Defines what to return if the model call fails.
-
-6. should_verify(system, safe_input, merged)
-	Decides whether to run an extra review or repair pass.
-
-7. verification_prompt(safe_input, merged)
-	Builds the prompt for that review or repair pass.
-
-8. verification_system_prompt()
-	Defines the system instructions for the verification step.
-
-In practice, the most important methods for making a workflow truly distinct are usually:
-
-1. system_prompt()
-2. llm_prompt(...)
-3. normalize_output(...)
-4. should_verify(...)
+- This is a capability comparison benchmark, not direct proof of field impact.
+- For stronger rank stability, increase sample counts and multilingual high-risk cases.

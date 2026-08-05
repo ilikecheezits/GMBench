@@ -1,268 +1,114 @@
-# Good Model Labs Benchmark Explained
+# Nonprofit LLM Benchmark Notes
 
-This document is written for project reviewers and decision makers.
+This document explains how the benchmark works from start to finish, with one concrete run example.
 
-## What this gives you
+## Purpose
 
-This framework gives you a fair side-by-side comparison of AI system options for one recurring nonprofit task.
+The benchmark compares LLMs on nonprofit strategy tasks under the same prompts and scoring rules.
 
-You can use it to answer:
+- Model-vs-model only
+- Shared task bank
+- Shared rubric criteria
+- Shared deterministic objective checks
 
-- Which implementation is strongest overall?
-- What does each option trade off in quality, speed, and cost?
-- Which system should be the baseline for the next phase?
+## Core Components
 
-## What "Workflow" Means In This Benchmark
+1. Task bank: [inspect_benchmark/nonprofit/task_bank.py](inspect_benchmark/nonprofit/task_bank.py)
+2. Task execution and judge prompting: [inspect_benchmark/nonprofit/tasks.py](inspect_benchmark/nonprofit/tasks.py)
+3. Deterministic objective checks: [inspect_benchmark/nonprofit/objective_metrics.py](inspect_benchmark/nonprofit/objective_metrics.py)
+4. Aggregation and reporting: [inspect_benchmark/nonprofit/leaderboard.py](inspect_benchmark/nonprofit/leaderboard.py)
+5. CLI entrypoint: [main.py](main.py)
 
-A workflow is one full system approach for handling the task, not just one model call.
+## Start-To-Finish Workflow (Example)
 
-Think of it as the full recipe:
+### Step 1: Run the benchmark
 
-1. How input is interpreted
-2. How the model is prompted
-3. What post-processing or safeguards are applied
-4. How final structured output is produced
-
-Why this is important for reviewers:
-
-- The benchmark compares complete approaches, not isolated prompt snippets.
-- A winning workflow is the strongest operational candidate to standardize.
-- Differences in scores reflect process design differences, not only model differences.
-
-### Concrete Example
-
-Task:
-
-- Convert a free-text food pantry intake note into structured JSON.
-
-Sample input note:
-
-- "Caller Amina Rahman, family of 6, needs groceries and baby formula. Bengali interpreter needed."
-
-What a workflow does step by step:
-
-1. Reads the note.
-2. Identifies key facts (name, size, services, language, urgency).
-3. Applies rules and checks to improve consistency.
-4. Produces a final structured output used for scoring.
-
-Sample output:
-
-```json
-{
-	"client_name": "Amina Rahman",
-	"household_size": 6,
-	"urgency": "high",
-	"requested_services": ["groceries", "baby formula"],
-	"preferred_language": "Bengali",
-	"notes_summary": "High-need household of 6 requesting groceries, baby formula."
-}
+```bash
+python main.py run \
+	--models openai/gpt-4.1-nano,openai/gpt-4.1-mini \
+	--tasks fundraising,grants,operations,communications,impact,governance,compliance \
+	--judge-model openai/gpt-4.1-mini \
+	--log-dir logs/nonprofit_llm_benchmark_budget_compare
 ```
 
-This is why workflow comparison matters: different workflows can produce different quality from the same input.
+What happens:
 
-### Track-Specific Input And Output Examples
+1. Task groups are resolved into sample sets.
+2. Each model answers each sample.
+3. Two scorers evaluate each answer.
 
-#### Nonprofit AI Tool Matching
+### Step 2: Per-sample scoring
 
-Sample input:
+For each model response, there are two independent scores.
 
-- "Budget: $80. Need help with volunteer scheduling. Data sensitivity: low. Main pain point: volunteers miss shifts."
+1. Judge score (LLM rubric grader): C, P, or I
 
-Sample output:
+- C = 1.0
+- P = 0.5
+- I = 0.0
 
-```json
-{
-	"recommended_package": "volunteer_coordination_basic",
-	"primary_tool_category": "volunteer_coordination",
-	"activation_horizon_days": 14,
-	"estimated_monthly_cost_usd": 48,
-	"risk_level": "low",
-	"success_metric": "volunteer_shift_fill_rate"
-}
+2. Objective score (deterministic checks): value in [0, 1]
+
+- Length/depth checks
+- Structure checks
+- Task-keyword coverage
+- Numeric-signal checks when requested
+- Language compliance checks
+- High-risk safeguard checks
+
+Hybrid score combines both:
+
+$$
+	ext{Hybrid} = 0.65 \times \text{Objective} + 0.35 \times \text{Judge}
+$$
+
+### Step 3: Logs are written
+
+Inspect writes raw eval logs to:
+
+- [logs/nonprofit_llm_benchmark_budget_compare](logs/nonprofit_llm_benchmark_budget_compare)
+
+These logs include prompts, model outputs, metadata slices, scores, and runtime usage.
+
+### Step 4: Build reports
+
+```bash
+python main.py leaderboard \
+	--log-dir logs/nonprofit_llm_benchmark_budget_compare \
+	--output artifacts/nonprofit_llm_leaderboard_budget_compare.md
+
+python main.py task-scores \
+	--log-dir logs/nonprofit_llm_benchmark_budget_compare \
+	--output artifacts/nonprofit_task_scores_budget_compare.md
 ```
 
-#### Food Pantry Intake Structuring
+Outputs:
 
-Sample input:
+1. Overall model ranking: [artifacts/nonprofit_llm_leaderboard_budget_compare.md](artifacts/nonprofit_llm_leaderboard_budget_compare.md)
+2. Task-slice breakdown: [artifacts/nonprofit_task_scores_budget_compare.md](artifacts/nonprofit_task_scores_budget_compare.md)
 
-- "Caller Amina Rahman, family of 6, needs groceries and baby formula. Bengali interpreter needed."
+## How To Interpret Reports
 
-Sample output:
+Leaderboard columns:
 
-```json
-{
-	"client_name": "Amina Rahman",
-	"household_size": 6,
-	"urgency": "high",
-	"requested_services": ["groceries", "baby formula"],
-	"preferred_language": "Bengali",
-	"notes_summary": "High-need household of 6 requesting groceries, baby formula."
-}
-```
+- Hybrid Mean: final weighted score used for ranking
+- Objective Mean: deterministic score only
+- Judge Mean: LLM rubric score only
+- Samples: total sample evaluations for that model
+- Task Coverage: number of task groups covered
 
-## What this does not give you
+Task-slice columns:
 
-This benchmark does not directly measure real-world impact at a nonprofit site.
+- Task/Area/Difficulty/Language/Risk identify the slice
+- Hybrid Mean/Objectve Mean/Judge Mean show quality by slice
+- C/P/I rates show how judge labels are distributed
 
-It evaluates system behavior in a controlled test setting.
+## Why This Is More Reliable Than Judge-Only
 
-## Simple start-to-finish view
+The deterministic objective rubric anchors scoring to fixed checks, reducing variance from LLM grader behavior.
 
-When you run `python main.py`, this happens:
+The judge rubric still contributes, but no longer dominates ranking.
 
-1. The benchmark loads one dataset for one task.
-2. It loads all registered system variants for that task.
-3. It runs each system on the same examples.
-4. It scores each system with the same metric suite.
-5. It computes a weighted overall score.
-6. It prints a ranked leaderboard.
-7. It stores traces and failure logs for auditability.
+## Limitation
 
-Track selection:
-
-1. `python main.py --track nonprofit_tool_matching`
-2. `python main.py --track food_pantry`
-3. `python main.py --track all`
-
-## Why reviewers should trust the comparison
-
-1. Same test cases for all systems.
-2. Same scoring rules for all systems.
-3. Weighted ranking is explicit and configurable.
-4. Failed runs and traces are saved for investigation.
-
-## Current built-in benchmarks
-
-This repository currently includes two benchmark tracks.
-
-1. Nonprofit AI Tool Matching (default)
-2. Food Pantry Intake Structuring
-
-Track details:
-
-- Nonprofit AI Tool Matching
-	- Dataset ID: nonprofit_tool_matching_v1
-	- Includes multilingual and higher-risk identity/access scenarios
-	- Systems: Nonprofit Tool Matcher Balanced, Budget, and Expansive
-- Food Pantry Intake Structuring
-	- Dataset ID: food_pantry_intake_v1
-	- Includes prompt-injection coverage
-	- Systems: Food Pantry Intake Workflow A, B, C, and D
-
-Default model settings:
-
-- Workflow model: gpt-4o-mini
-- Judge model: gpt-4o-mini
-
-Evaluation policy:
-
-- Zero-shot only with plain vanilla base models
-- Fine-tuned model identifiers are rejected during provider calls
-- Temperature defaults to 0.0 for deterministic behavior
-
-## How scoring works
-
-Each system receives multiple metric scores, then one weighted overall score.
-
-Metric families include:
-
-- Quality metrics
-- Reliability and safety metrics
-- Speed and cost metrics
-- LLM judge quality metric
-
-Weighted score logic:
-
-- Positive weight means higher is better.
-- Negative weight means lower is better.
-- Missing metrics are ignored.
-
-## Performance and runtime behavior
-
-To keep runtime practical, the framework uses bounded parallelism:
-
-- System ranking concurrency default: 3
-- Per-system example concurrency default: 4
-- LLM judge concurrency default: 4
-
-This speeds up runs while keeping control over API pressure.
-
-## Governance and traceability outputs
-
-Each run produces:
-
-1. Leaderboard output for decision-making
-2. Trace files showing step-by-step system execution
-3. Failure logs with input, expected output, actual output, and error context
-
-These artifacts help explain results to leadership and support audit reviews.
-
-## Credentials and provider behavior
-
-The framework auto-loads .env from repository root.
-
-Minimum real-provider setup:
-
-1. OPENAI_API_KEY=your_key_here
-
-If no provider key is available, it falls back to MockProvider for local testing.
-
-## Practical use guidance
-
-Use this framework to choose a technical baseline implementation for a recurring task.
-
-Do not use this framework alone to claim operational impact outcomes.
-
-## How New Workflows Can Be Added
-
-The current implementation is set up so new workflow variants can be added with limited code changes.
-
-In practice, adding a new workflow means:
-
-1. Define a new workflow strategy class with its own prompt style and behavior rules.
-2. Add that strategy to the workflow strategy registry.
-3. Register a new workflow class that points to that strategy.
-4. Run the same dataset and compare the new result against the others.
-
-This makes it easier to test new strategies without rebuilding the full benchmark each time, and it avoids locking workflow design into a fixed set of boolean options.
-
-Concrete example now included in the codebase:
-
-1. Workflow D is a recall-heavy strategy.
-2. It was added by defining one new strategy class, registering it in the strategy registry, and adding one small workflow class that points to it.
-
-## Primary WorkflowStrategy Methods
-
-For teams adding a new workflow, these are the main strategy methods that shape behavior:
-
-1. system_prompt()
-	Controls the active system instructions given to the model.
-
-2. llm_prompt(safe_input)
-	Controls how the actual task request is presented to the model.
-
-3. sanitize_input(text)
-	Controls any cleanup or filtering before the model sees the input.
-
-4. normalize_output(system, parsed, safe_input)
-	Controls how raw model output is turned into the final structured answer.
-
-5. fallback_output(system, safe_input)
-	Controls what the workflow returns if the model call fails.
-
-6. should_verify(system, safe_input, merged)
-	Controls whether the workflow performs an extra review or repair pass.
-
-7. verification_prompt(safe_input, merged)
-	Controls the prompt used for that extra review or repair pass.
-
-8. verification_system_prompt()
-	Controls the system instructions used during the review step.
-
-Most workflow differences come from changing:
-
-1. system_prompt()
-2. llm_prompt(...)
-3. normalize_output(...)
-4. should_verify(...)
+This benchmark is a controlled capability comparison and should not be treated as direct proof of real-world nonprofit impact without field validation.
