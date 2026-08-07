@@ -1,6 +1,20 @@
 # Nonprofit LLM Benchmark (inspect_ai)
 
-This repository runs a nonprofit-focused LLM-vs-LLM benchmark using inspect_ai.
+This repository runs a nonprofit-focused LLM-vs-LLM benchmark using [inspect_ai](https://inspect.aisi.org.uk/), the open-source eval framework from the UK AI Security Institute.
+
+## Why This Benchmark Exists
+
+Most LLM benchmarks test general knowledge or coding. None measure what nonprofit practitioners actually need: strategy quality under resource constraints, compliance awareness, board communication, grant writing, and impact framing. This benchmark fills that gap.
+
+The design follows three principles, adapted from [HealthBench](https://openai.com/index/healthbench/) (the closest prior work, using physician-written rubrics):
+
+- **Meaningful**: Tasks are realistic nonprofit scenarios, not trivia. Scores should reflect real practitioner judgment.
+- **Trustworthy**: Rubric criteria are grounded in sector-specific standards, not LLM intuition alone. Deterministic objective checks anchor scoring.
+- **Unsaturated**: Current models still have substantial room to improve on hard cases. The benchmark should remain a useful signal as models get stronger.
+
+## Why Inspect AI
+
+The valuable part of a benchmark is the tasks and grading criteria, not the runner. [Inspect AI](https://inspect.aisi.org.uk/) gives us the runner for free: fan-out across 20+ model providers, retries, reproducible logs of every prompt/response/grade, and a viewer for inspecting individual transcripts. Building on a framework from the UK AI Security Institute means we inherit credibility and don't have to defend homegrown tooling.
 
 ## What It Measures
 
@@ -132,6 +146,19 @@ python main.py task-scores \
 - [inspect_benchmark/nonprofit/tasks.py](inspect_benchmark/nonprofit/tasks.py): task wiring and judge prompt
 - [inspect_benchmark/nonprofit/objective_metrics.py](inspect_benchmark/nonprofit/objective_metrics.py): deterministic objective rubric scorer
 - [inspect_benchmark/nonprofit/leaderboard.py](inspect_benchmark/nonprofit/leaderboard.py): leaderboard + task-score aggregation
+
+## Benchmark Quality Standards
+
+This benchmark is designed against the [BetterBench](https://betterbench.stanford.edu/index.html) checklist (NeurIPS 2024), which evaluates AI benchmarks across 46 quality criteria covering task design, scoring validity, and usability. Key practices followed:
+
+- Tasks are drawn from realistic practitioner scenarios, not synthetic edge cases.
+- Scoring is split into deterministic (objective) and model-graded (judge) components to reduce grader variance.
+- Logs are fully reproducible: every prompt, response, and grade is captured by Inspect AI.
+- Leaderboard reports include task-slice breakdowns so results can be interrogated by domain, difficulty, language, and risk level.
+
+## Roadmap: Community Task Contributions
+
+This benchmark follows a crowdsourcing model inspired by [LegalBench](https://github.com/HazyResearch/legalbench), which builds tasks from a professional community. The goal is to expand the task bank with contributions from nonprofit practitioners — EDs, program directors, grant writers, and compliance leads — who can submit tasks and rubric criteria from their real work. This makes the benchmark harder to game and more representative of the sector over time.
 
 ## Notes
 

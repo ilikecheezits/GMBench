@@ -4,12 +4,28 @@ This document explains how the benchmark works from start to finish, with one co
 
 ## Purpose
 
-The benchmark compares LLMs on nonprofit strategy tasks under the same prompts and scoring rules.
+The benchmark compares LLMs on nonprofit strategy tasks under the same prompts and scoring rules. Most existing benchmarks test general knowledge or coding — none measure what nonprofit practitioners actually need.
 
 - Model-vs-model only
 - Shared task bank
 - Shared rubric criteria
 - Shared deterministic objective checks
+
+## Design Philosophy
+
+This benchmark follows three principles from [HealthBench](https://openai.com/index/healthbench/) (physician-written rubrics, closest to our design):
+
+- **Meaningful**: Tasks are realistic nonprofit scenarios — grant writing, board governance, compliance, impact measurement — not generic prompts.
+- **Trustworthy**: Rubric criteria are grounded in sector-specific standards. Deterministic objective checks anchor scoring so LLM grader variance doesn't dominate.
+- **Unsaturated**: Current models still have substantial room to improve. The benchmark stays useful as a signal as models get stronger.
+
+## Why Inspect AI
+
+We build on [Inspect AI](https://inspect.aisi.org.uk/) (UK AI Security Institute), the open-source eval framework that serious evaluation work is standardized on. The valuable part of a benchmark is the tasks and grading criteria, not the runner — Inspect gives us the runner for free: fan-out across 20+ model providers, retries, reproducible logs of every prompt/response/grade, and a viewer for inspecting individual transcripts. We inherit credibility and don't have to defend homegrown tooling.
+
+## Methodology Reference
+
+Benchmark design follows the [BetterBench](https://betterbench.stanford.edu/index.html) quality framework (NeurIPS 2024 Spotlight), which evaluates AI benchmarks across 46 criteria. Task crowdsourcing follows the [LegalBench](https://github.com/HazyResearch/legalbench) model — building tasks from the professional community (nonprofit practitioners: EDs, program directors, grant writers, compliance leads) rather than generating them synthetically.
 
 ## Core Components
 
@@ -109,6 +125,8 @@ The deterministic objective rubric anchors scoring to fixed checks, reducing var
 
 The judge rubric still contributes, but no longer dominates ranking.
 
-## Limitation
+## Limitations
 
 This benchmark is a controlled capability comparison and should not be treated as direct proof of real-world nonprofit impact without field validation.
+
+For stronger rank stability: increase sample counts, add multilingual high-risk cases, and expand the task bank with practitioner-contributed tasks (see the [LegalBench](https://github.com/HazyResearch/legalbench) crowdsourcing model).
