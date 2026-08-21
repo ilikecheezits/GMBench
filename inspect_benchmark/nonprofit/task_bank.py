@@ -543,6 +543,50 @@ def validate_task_bank() -> dict[str, object]:
     }
 
 
+def build_context_variant(
+    *,
+    sample_id: str,
+    task_area: str,
+    difficulty: str,
+    language: str,
+    risk_level: str,
+    prompt: str,
+    criterion: str,
+    reference_answer: str,
+    organization_name: str | None = None,
+    staff_size: int | None = None,
+    budget: float | int | None = None,
+    major_constraints: Iterable[str] | None = None,
+) -> NonprofitSampleSpec:
+    """Return a task variant with organization-specific constraints added to the prompt."""
+
+    context_bits: list[str] = []
+    if organization_name:
+        context_bits.append(f"Organization: {organization_name}.")
+    if staff_size is not None:
+        context_bits.append(f"Staff size: {staff_size} people.")
+    if budget is not None:
+        context_bits.append(f"Budget: ${budget:,.0f} annual or current operating budget.")
+    constraints = list(major_constraints or [])
+    if constraints:
+        context_bits.append("Key constraints: " + "; ".join(constraints) + ".")
+
+    enhanced_prompt = prompt.strip()
+    if context_bits:
+        enhanced_prompt = "\n".join([*context_bits, "Task:", enhanced_prompt])
+
+    return NonprofitSampleSpec(
+        sample_id=sample_id,
+        task_area=task_area,
+        difficulty=difficulty,
+        language=language,
+        risk_level=risk_level,
+        prompt=enhanced_prompt,
+        criterion=criterion,
+        reference_answer=reference_answer,
+    )
+
+
 def samples_for_areas(task_areas: Iterable[str]) -> List[NonprofitSampleSpec]:
     """Return samples for selected task areas."""
 

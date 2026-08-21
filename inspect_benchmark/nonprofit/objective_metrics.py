@@ -45,6 +45,20 @@ _EXECUTION_REALISM_TERMS = [
     "monitor",
 ]
 
+_GENERIC_TEMPLATE_MARKERS = [
+    "cutting-edge",
+    "innovative",
+    "transformative",
+    "holistic approach",
+    "synergy",
+    "strategic alignment",
+    "stakeholder engagement",
+    "future-proof",
+    "robust framework",
+    "value creation",
+    "impactful",
+]
+
 _HIGH_RISK_TERMS = [
     "consent",
     "privacy",
@@ -132,6 +146,18 @@ def _needs_numeric_content(prompt: str, criterion: str) -> bool:
     return any(marker in trigger_text for marker in markers)
 
 
+def generic_template_penalty(text: str) -> bool:
+    """Return True when a response is mostly generic, polished fluff with little operational substance."""
+
+    lower = text.lower()
+    generic_hits = sum(1 for marker in _GENERIC_TEMPLATE_MARKERS if marker in lower)
+    operational_hits = sum(1 for marker in _EXECUTION_REALISM_TERMS if marker in lower)
+    numeric_hits = bool(_NUMBER_RE.search(text))
+    action_hits = sum(1 for verb in _ACTION_VERBS if verb in lower)
+
+    return generic_hits >= 2 and operational_hits + action_hits + (1 if numeric_hits else 0) <= 2
+
+
 @scorer(metrics=[mean_metric()], name="objective_rubric")
 def objective_rubric_scorer():
     """Score completions using deterministic rubric checks only."""
@@ -176,6 +202,7 @@ def objective_rubric_scorer():
 
         # Require evidence that the answer reflects operational constraints, not template advice.
         checks["execution_realism"] = _coverage_score(text, _EXECUTION_REALISM_TERMS, threshold=0.2)
+        checks["non_generic_template"] = not generic_template_penalty(text)
 
         # Language compliance for multilingual scenarios.
         checks["language_compliance"] = _language_check(text, language)

@@ -1,132 +1,137 @@
-# Nonprofit LLM Benchmark Notes
+# Nonprofit LLM Benchmark: Implementation and Runbook
 
-This document explains how the benchmark works from start to finish, with one concrete run example.
+This document is the technical companion to [README.md](README.md). It is meant for people who want to understand the benchmark implementation, how scoring works, and how to reproduce the workflow.
 
 ## Purpose
 
-The benchmark compares LLMs on nonprofit strategy tasks under the same prompts and scoring rules. Most existing benchmarks test general knowledge or coding — none measure what nonprofit practitioners actually need.
+The benchmark compares models on nonprofit-relevant decision-making tasks under a shared prompt set and shared scoring rules. It is designed to measure practical nonprofit reasoning rather than generic conversational fluency.
 
-- Model-vs-model only
-- Shared task bank
-- Shared rubric criteria
-- Shared deterministic objective checks
+## Benchmark structure
 
-## Design Philosophy
+Core implementation files:
 
-This benchmark follows three principles from [HealthBench](https://openai.com/index/healthbench/) (physician-written rubrics, closest to our design):
+- [main.py](main.py): CLI entrypoint
+- [inspect_benchmark/nonprofit/task_bank.py](inspect_benchmark/nonprofit/task_bank.py): task definitions and metadata
+- [inspect_benchmark/nonprofit/tasks.py](inspect_benchmark/nonprofit/tasks.py): task generation and judge scoring setup
+- [inspect_benchmark/nonprofit/objective_metrics.py](inspect_benchmark/nonprofit/objective_metrics.py): objective checks
+- [inspect_benchmark/nonprofit/leaderboard.py](inspect_benchmark/nonprofit/leaderboard.py): aggregation and reporting
+- [inspect_benchmark/nonprofit/scoring.py](inspect_benchmark/nonprofit/scoring.py): flexible weighted scoring configuration
 
-- **Meaningful**: Tasks are realistic nonprofit scenarios — grant writing, board governance, compliance, impact measurement — not generic prompts.
-- **Trustworthy**: Rubric criteria are grounded in sector-specific standards. Deterministic objective checks anchor scoring so LLM grader variance doesn't dominate.
-- **Unsaturated**: Current models still have substantial room to improve. The benchmark stays useful as a signal as models get stronger.
+## Task domains
 
-## Why Inspect AI
+The benchmark currently includes these task areas:
 
-We build on [Inspect AI](https://inspect.aisi.org.uk/) (UK AI Security Institute), the open-source eval framework that serious evaluation work is standardized on. The valuable part of a benchmark is the tasks and grading criteria, not the runner — Inspect gives us the runner for free: fan-out across 20+ model providers, retries, reproducible logs of every prompt/response/grade, and a viewer for inspecting individual transcripts. We inherit credibility and don't have to defend homegrown tooling.
+- fundraising_strategy
+- grant_writing
+- operations_prioritization
+- community_communications
+- impact_measurement
+- board_governance
+- compliance_and_privacy
 
-## Methodology Reference
+## Scoring model
 
-Benchmark design follows the [BetterBench](https://betterbench.stanford.edu/index.html) quality framework (NeurIPS 2024 Spotlight), which evaluates AI benchmarks across 46 criteria. Task crowdsourcing follows the [LegalBench](https://github.com/HazyResearch/legalbench) model — building tasks from the professional community (nonprofit practitioners: EDs, program directors, grant writers, compliance leads) rather than generating them synthetically.
+Each model response is scored in two ways:
 
-## Core Components
+1. Objective score
+   - structured response checks
+   - task-area coverage checks
+   - numeric or milestone requirements when relevant
+   - language compliance checks
+   - high-risk safeguard checks
+   - realism checks to reject generic template answers
 
-1. Task bank: [inspect_benchmark/nonprofit/task_bank.py](inspect_benchmark/nonprofit/task_bank.py)
-2. Task execution and judge prompting: [inspect_benchmark/nonprofit/tasks.py](inspect_benchmark/nonprofit/tasks.py)
-3. Deterministic objective checks: [inspect_benchmark/nonprofit/objective_metrics.py](inspect_benchmark/nonprofit/objective_metrics.py)
-4. Aggregation and reporting: [inspect_benchmark/nonprofit/leaderboard.py](inspect_benchmark/nonprofit/leaderboard.py)
-5. CLI entrypoint: [main.py](main.py)
+2. Judge score
+   - model-graded rubric labels: C, P, or I
+   - converted numerically as: C = 1.0, P = 0.5, I = 0.0
 
-## Start-To-Finish Workflow (Example)
+The hybrid score is:
 
-### Step 1: Run the benchmark
+$$
+\text{Hybrid} = 0.65 \times \text{Objective} + 0.35 \times \text{Judge}
+$$
+
+## Workflow
+
+### 1. Validate benchmark health
+
+```bash
+cd /Users/Samuel/GMBench
+source .venv/bin/activate
+python main.py validate
+```
+
+This checks that the task bank is structurally valid and that all required task areas are present.
+
+### 2. Run the benchmark
 
 ```bash
 python main.py run \
-	--models openai/gpt-4.1-nano,openai/gpt-4.1-mini \
-	--tasks fundraising,grants,operations,communications,impact,governance,compliance \
-	--judge-model openai/gpt-4.1-mini \
-	--log-dir logs/nonprofit_llm_benchmark_budget_compare
+  --models openai/gpt-4.1-nano,openai/gpt-4.1-mini \
+  --tasks fundraising,grants,operations,communications,impact,governance,compliance \
+  --judge-model openai/gpt-4.1-mini \
+  --log-dir logs/nonprofit_llm_benchmark_budget_compare
 ```
 
-What happens:
+What this does:
 
-1. Task groups are resolved into sample sets.
-2. Each model answers each sample.
-3. Two scorers evaluate each answer.
+- resolves the selected task groups
+- creates the sample sets
+- runs each model on each sample
+- evaluates with both objective and judge scoring
+- writes Inspect logs to the provided log directory
 
-### Step 2: Per-sample scoring
-
-For each model response, there are two independent scores.
-
-1. Judge score (LLM rubric grader): C, P, or I
-
-- C = 1.0
-- P = 0.5
-- I = 0.0
-
-2. Objective score (deterministic checks): value in [0, 1]
-
-- Length/depth checks
-- Structure checks
-- Task-keyword coverage
-- Numeric-signal checks when requested
-- Language compliance checks
-- High-risk safeguard checks
-
-Hybrid score combines both:
-
-$$
-	ext{Hybrid} = 0.65 \times \text{Objective} + 0.35 \times \text{Judge}
-$$
-
-### Step 3: Logs are written
-
-Inspect writes raw eval logs to:
-
-- [logs/nonprofit_llm_benchmark_budget_compare](logs/nonprofit_llm_benchmark_budget_compare)
-
-These logs include prompts, model outputs, metadata slices, scores, and runtime usage.
-
-### Step 4: Build reports
+### 3. Produce reports
 
 ```bash
 python main.py leaderboard \
-	--log-dir logs/nonprofit_llm_benchmark_budget_compare \
-	--output artifacts/nonprofit_llm_leaderboard_budget_compare.md
+  --log-dir logs/nonprofit_llm_benchmark_budget_compare \
+  --output artifacts/nonprofit_llm_leaderboard_budget_compare.md
 
 python main.py task-scores \
-	--log-dir logs/nonprofit_llm_benchmark_budget_compare \
-	--output artifacts/nonprofit_task_scores_budget_compare.md
+  --log-dir logs/nonprofit_llm_benchmark_budget_compare \
+  --output artifacts/nonprofit_task_scores_budget_compare.md
 ```
 
 Outputs:
 
-1. Overall model ranking: [artifacts/nonprofit_llm_leaderboard_budget_compare.md](artifacts/nonprofit_llm_leaderboard_budget_compare.md)
-2. Task-slice breakdown: [artifacts/nonprofit_task_scores_budget_compare.md](artifacts/nonprofit_task_scores_budget_compare.md)
+- [artifacts/nonprofit_llm_leaderboard_budget_compare.md](artifacts/nonprofit_llm_leaderboard_budget_compare.md)
+- [artifacts/nonprofit_task_scores_budget_compare.md](artifacts/nonprofit_task_scores_budget_compare.md)
 
-## How To Interpret Reports
+### 4. Inspect logs
 
-Leaderboard columns:
+Raw logs are stored in:
 
-- Hybrid Mean: final weighted score used for ranking
-- Objective Mean: deterministic score only
-- Judge Mean: LLM rubric score only
-- Samples: total sample evaluations for that model
-- Task Coverage: number of task groups covered
+- [logs/nonprofit_llm_benchmark_budget_compare](logs/nonprofit_llm_benchmark_budget_compare)
 
-Task-slice columns:
+These logs include prompts, outputs, score metadata, and task slices.
 
-- Task/Area/Difficulty/Language/Risk identify the slice
-- Hybrid Mean/Objectve Mean/Judge Mean show quality by slice
-- C/P/I rates show how judge labels are distributed
+## Benchmark rigor and evaluation choices
 
-## Why This Is More Reliable Than Judge-Only
+The benchmark is intentionally not judge-only. The deterministic objective scorer anchors evaluation and reduces grader variance. The judge score still matters, but it does not dominate the final ranking.
 
-The deterministic objective rubric anchors scoring to fixed checks, reducing variance from LLM grader behavior.
+The current implementation also includes:
 
-The judge rubric still contributes, but no longer dominates ranking.
+- context-aware task variants
+- safeguard checks for privacy and high-risk decisions
+- generic-fluff detection to reduce template-style answers
+- a modular weighted-scoring layer for future benchmark-of-benchmarks composition
 
 ## Limitations
 
-This benchmark is a controlled capability comparison and should not be treated as direct proof of real-world nonprofit impact without field validation.
+This remains a benchmark of capability, not direct proof of real nonprofit impact. It is best used for comparative model evaluation under a defined task set, not as a substitute for field trials or practitioner validation.
 
-For stronger rank stability: increase sample counts, add multilingual high-risk cases, and expand the task bank with practitioner-contributed tasks (see the [LegalBench](https://github.com/HazyResearch/legalbench) crowdsourcing model).
+## Recommended next steps
+
+- add expert calibration data
+- add adversarial realism cases
+- add external benchmark components into the weighted scoring layer
+- make org-context tailoring configurable in benchmark setup
+
+## References
+
+- [README.md](README.md)
+- [inspect_ai](https://inspect.aisi.org.uk/)
+- [HealthBench](https://openai.com/index/healthbench/)
+- [BetterBench](https://betterbench.stanford.edu/index.html)
+- [LegalBench](https://github.com/HazyResearch/legalbench)
