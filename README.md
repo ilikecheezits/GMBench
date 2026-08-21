@@ -43,6 +43,26 @@ Task definitions are in [inspect_benchmark/nonprofit/tasks.py](inspect_benchmark
 	- objective weight: 0.65
 	- judge weight: 0.35
 
+## Benchmark Rigor Improvements
+
+The project now includes a first round of rigor upgrades meant to reflect real nonprofit workflows rather than generic reasoning. The goal is to make the current benchmark more realistic without waiting for a perfect production dataset.
+
+Implemented improvements:
+
+- Task-area-aware objective checks: the determinisitic scorer now looks for concepts specific to each nonprofit domain, not just generic length and keyword counts.
+- Execution realism checks: answers must reflect operational constraints such as team capacity, timelines, budget constraints, and monitoring/oversight.
+- High-risk safeguards: privacy, compliance, and fairness scenarios require explicit controls and reject unsafe shortcuts.
+- Benchmark validation: the project now includes a built-in validation check for task coverage and schema integrity before runs are trusted.
+- Flexible scoring composition: the scoring architecture in [inspect_benchmark/nonprofit/scoring.py](inspect_benchmark/nonprofit/scoring.py) is intentionally extensible and supports future benchmark-of-benchmarks weighting without rewriting leaderboard logic.
+
+Future rigor ideas for the benchmark:
+
+- Add task variants that include organization context, staffing limits, and budget constraints.
+- Combine objective rubric signals with task- and domain-specific evidence checks (for example: grant narrative completeness, communications channel appropriateness, governance controls).
+- Add a small expert-review calibration set to tune judge prompts and grade thresholds.
+- Introduce a benchmark-of-benchmarks layer where external evaluator signals are added as weighted components on top of the domain-specific nonprofit score.
+- Add a small suite of adversarial cases designed to catch generic, template-like outputs that pass basic keyword checks but fail on realistic nonprofit execution.
+
 ## Install
 
 ```bash
@@ -53,6 +73,14 @@ Set credentials as needed:
 
 ```bash
 export OPENAI_API_KEY=...
+```
+
+## Validate Benchmark Health
+
+Before running the benchmark, validate that the task bank is well-formed and covers all required nonprofit domains.
+
+```bash
+python main.py validate
 ```
 
 ## Run Benchmark
@@ -140,11 +168,12 @@ python main.py task-scores \
 
 ## Repository Layout
 
-- [main.py](main.py): CLI (`run`, `leaderboard`, `task-scores`)
+- [main.py](main.py): CLI (`run`, `validate`, `leaderboard`, `task-scores`)
 - [inspect_benchmark/nonprofit/run_eval_set.py](inspect_benchmark/nonprofit/run_eval_set.py): inspect eval_set execution
-- [inspect_benchmark/nonprofit/task_bank.py](inspect_benchmark/nonprofit/task_bank.py): benchmark samples
+- [inspect_benchmark/nonprofit/task_bank.py](inspect_benchmark/nonprofit/task_bank.py): benchmark samples + validation helper
 - [inspect_benchmark/nonprofit/tasks.py](inspect_benchmark/nonprofit/tasks.py): task wiring and judge prompt
 - [inspect_benchmark/nonprofit/objective_metrics.py](inspect_benchmark/nonprofit/objective_metrics.py): deterministic objective rubric scorer
+- [inspect_benchmark/nonprofit/scoring.py](inspect_benchmark/nonprofit/scoring.py): flexible weighted-scoring configuration designed for future benchmark-of-benchmarks composition
 - [inspect_benchmark/nonprofit/leaderboard.py](inspect_benchmark/nonprofit/leaderboard.py): leaderboard + task-score aggregation
 
 ## Benchmark Quality Standards
@@ -164,3 +193,4 @@ This benchmark follows a crowdsourcing model inspired by [LegalBench](https://gi
 
 - This is a capability comparison benchmark, not direct proof of field impact.
 - For stronger rank stability, increase sample counts and multilingual high-risk cases.
+- The project is intentionally structured so that part 2 of the roadmap — a benchmark-of-benchmarks architecture — can be added by composing additional score components without reworking the scoring model or CLI.

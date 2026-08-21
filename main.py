@@ -8,6 +8,7 @@ from inspect_benchmark.nonprofit import (
     export_markdown_leaderboard,
     export_markdown_task_scores,
     run_nonprofit_eval_set,
+    validate_task_bank,
 )
 
 
@@ -75,6 +76,10 @@ def _parse_args() -> argparse.Namespace:
         help="Output markdown file path.",
     )
 
+    validate_parser = subparsers.add_parser(
+        "validate", help="Check benchmark task-bank coverage and schema validity."
+    )
+
     return parser.parse_args()
 
 
@@ -104,6 +109,16 @@ if __name__ == "__main__":
         print("Leaderboard generated")
         print(f"Models ranked: {model_count}")
         print(f"Output: {output_path}")
+    elif args.command == "validate":
+        report = validate_task_bank()
+        print("Benchmark validation report")
+        print(f"Valid: {report['valid']}")
+        print(f"Total samples: {report['total_samples']}")
+        print(f"Task areas: {', '.join(report['task_areas'])}")
+        if report["errors"]:
+            print("Errors:")
+            for error in report["errors"]:
+                print(f"- {error}")
     else:
         output_path, row_count = export_markdown_task_scores(args.log_dir, args.output)
         print("Task score breakdown generated")

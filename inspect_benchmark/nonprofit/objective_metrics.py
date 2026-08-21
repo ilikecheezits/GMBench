@@ -20,6 +20,31 @@ _AREA_KEYWORDS = {
     "compliance_and_privacy": ["privacy", "retention", "deletion", "audit", "policy"],
 }
 
+_TASK_SPECIFIC_REQUIREMENTS = {
+    "fundraising_strategy": ["channel", "timeline", "metric", "donor", "goal"],
+    "grant_writing": ["risk", "outcome", "timeline", "mitigation", "budget"],
+    "operations_prioritization": ["priority", "tradeoff", "feasibility", "impact", "timeline"],
+    "community_communications": ["support", "channel", "message", "follow-up", "update"],
+    "impact_measurement": ["indicator", "baseline", "data", "limit", "measurement"],
+    "board_governance": ["decision", "risk", "budget", "oversight", "monitoring"],
+    "compliance_and_privacy": ["privacy", "retention", "deletion", "audit", "review"],
+}
+
+_EXECUTION_REALISM_TERMS = [
+    "budget",
+    "capacity",
+    "timeline",
+    "team",
+    "staff",
+    "feasible",
+    "constraints",
+    "risk",
+    "pilot",
+    "owner",
+    "review",
+    "monitor",
+]
+
 _HIGH_RISK_TERMS = [
     "consent",
     "privacy",
@@ -144,6 +169,13 @@ def objective_rubric_scorer():
             checks["quantitative_signal"] = number_hits >= (2 if difficulty == "hard" else 1)
         else:
             checks["quantitative_signal"] = True
+
+        # Task-specific realism: ask for concepts that are core to nonprofit execution.
+        specific_terms = _TASK_SPECIFIC_REQUIREMENTS.get(task_area, [])
+        checks["task_specific_coverage"] = _coverage_score(text, specific_terms, threshold=0.5)
+
+        # Require evidence that the answer reflects operational constraints, not template advice.
+        checks["execution_realism"] = _coverage_score(text, _EXECUTION_REALISM_TERMS, threshold=0.2)
 
         # Language compliance for multilingual scenarios.
         checks["language_compliance"] = _language_check(text, language)

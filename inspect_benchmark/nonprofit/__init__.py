@@ -2,5 +2,11 @@
 
 from .leaderboard import export_markdown_leaderboard, export_markdown_task_scores
 from .run_eval_set import run_nonprofit_eval_set
+from .task_bank import validate_task_bank
 
-__all__ = ["run_nonprofit_eval_set", "export_markdown_leaderboard", "export_markdown_task_scores"]
+__all__ = [
+    "run_nonprofit_eval_set",
+    "export_markdown_leaderboard",
+    "export_markdown_task_scores",
+    "validate_task_bank",
+]

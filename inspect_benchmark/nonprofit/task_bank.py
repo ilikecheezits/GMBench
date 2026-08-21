@@ -490,6 +490,59 @@ def all_samples() -> List[NonprofitSampleSpec]:
     ]
 
 
+def validate_task_bank() -> dict[str, object]:
+    """Return a lightweight sanity check for benchmark coverage and schema integrity."""
+
+    samples = all_samples()
+    required_fields = [
+        "sample_id",
+        "task_area",
+        "difficulty",
+        "language",
+        "risk_level",
+        "prompt",
+        "criterion",
+        "reference_answer",
+    ]
+    task_areas: dict[str, int] = {}
+    seen_ids: set[str] = set()
+    errors: list[str] = []
+
+    for sample in samples:
+        for field in required_fields:
+            value = getattr(sample, field, None)
+            if value is None or not str(value).strip():
+                errors.append(f"{sample.sample_id} missing required field: {field}")
+
+        if sample.sample_id in seen_ids:
+            errors.append(f"Duplicate sample_id: {sample.sample_id}")
+        seen_ids.add(sample.sample_id)
+
+        task_areas[sample.task_area] = task_areas.get(sample.task_area, 0) + 1
+
+    expected_areas = [
+        "fundraising_strategy",
+        "grant_writing",
+        "operations_prioritization",
+        "community_communications",
+        "impact_measurement",
+        "board_governance",
+        "compliance_and_privacy",
+    ]
+    missing_areas = sorted(set(expected_areas) - set(task_areas))
+    if missing_areas:
+        errors.append(f"Missing task areas: {', '.join(missing_areas)}")
+
+    return {
+        "valid": not errors,
+        "errors": errors,
+        "total_samples": len(samples),
+        "task_areas": sorted(task_areas),
+        "tasks_by_area": dict(sorted(task_areas.items())),
+        "missing_areas": missing_areas,
+    }
+
+
 def samples_for_areas(task_areas: Iterable[str]) -> List[NonprofitSampleSpec]:
     """Return samples for selected task areas."""
 

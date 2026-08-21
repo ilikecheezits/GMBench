@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Tuple
 
+from .scoring import default_scoring_config
+
 OBJECTIVE_WEIGHT = 0.65
 JUDGE_WEIGHT = 0.35
 
@@ -87,7 +89,11 @@ def build_leaderboard_dataframe(log_dir: str):
     if merged.empty:
         raise ValueError("No parseable sample scores were found in logs.")
 
-    merged["hybrid_score"] = (OBJECTIVE_WEIGHT * merged["objective_score"]) + (JUDGE_WEIGHT * merged["judge_score"])
+    scoring_cfg = default_scoring_config()
+    merged["hybrid_score"] = merged.apply(
+        lambda row: scoring_cfg.score({"objective": row["objective_score"], "judge": row["judge_score"]}),
+        axis=1,
+    )
 
     grouped = (
         merged.groupby("model", as_index=False)
@@ -174,7 +180,12 @@ def build_task_scores_dataframe(log_dir: str):
         merged["objective_score"] = merged[objective_col].map(_score_to_float)
     else:
         merged["objective_score"] = merged["judge_score"]
-    merged["hybrid_score"] = (OBJECTIVE_WEIGHT * merged["objective_score"]) + (JUDGE_WEIGHT * merged["judge_score"])
+
+    scoring_cfg = default_scoring_config()
+    merged["hybrid_score"] = merged.apply(
+        lambda row: scoring_cfg.score({"objective": row["objective_score"], "judge": row["judge_score"]}),
+        axis=1,
+    )
 
     merged = merged[
         merged["judge_score"].notna() & merged["objective_score"].notna() & merged["hybrid_score"].notna()
