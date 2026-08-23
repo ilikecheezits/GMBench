@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Dict, Iterable, List
 
@@ -51,7 +52,11 @@ def run_nonprofit_eval_set(
     judge_model: str | None = None,
     limit_per_task: int | None = None,
 ) -> Dict[str, object]:
-    """Run all requested nonprofit tasks across all requested models."""
+    """Run all requested nonprofit tasks across all requested models.
+
+    If the target log directory already exists, it is replaced so the run cannot reuse
+    existing eval artifacts from the same directory.
+    """
 
     try:
         from inspect_ai import eval_set
@@ -65,6 +70,8 @@ def run_nonprofit_eval_set(
 
     tasks = _resolve_tasks(task_names=task_names, limit_per_task=limit_per_task)
     output_dir = Path(log_dir)
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     kwargs = {

@@ -47,7 +47,7 @@ def _parse_args() -> argparse.Namespace:
     run_parser.add_argument(
         "--log-dir",
         default="logs/nonprofit_llm_benchmark",
-        help="Directory to store inspect eval logs.",
+        help="Directory to store inspect eval logs. If it exists, it is replaced for a clean run.",
     )
 
     leaderboard_parser = subparsers.add_parser("leaderboard", help="Build leaderboard markdown from inspect logs.")

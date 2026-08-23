@@ -44,6 +44,25 @@ python main.py task-scores \
   --output artifacts/nonprofit_task_scores_budget_compare.md
 ```
 
+### Re-run cleanly on your own machine
+
+```bash
+cd /Users/Samuel/GMBench
+source .venv/bin/activate
+rm -rf logs/nonprofit_llm_benchmark_budget_compare_low_cost_test
+python main.py run \
+  --models "openai/gpt-4.1-nano,openai/gpt-4.1-mini,openai/gpt-4o-mini,openai/gpt-5-mini,openai/gpt-5-nano" \
+  --tasks "fundraising,grants,operations,communications,impact,governance,compliance" \
+  --judge-model openai/gpt-4.1-mini \
+  --log-dir logs/nonprofit_llm_benchmark_budget_compare_low_cost_test
+python main.py leaderboard \
+  --log-dir logs/nonprofit_llm_benchmark_budget_compare_low_cost_test \
+  --output artifacts/nonprofit_llm_leaderboard_budget_compare_low_cost_test.md
+python main.py task-scores \
+  --log-dir logs/nonprofit_llm_benchmark_budget_compare_low_cost_test \
+  --output artifacts/nonprofit_task_scores_budget_compare_low_cost_test.md
+```
+
 ## Repository at a glance
 
 - [main.py](main.py): CLI entrypoint

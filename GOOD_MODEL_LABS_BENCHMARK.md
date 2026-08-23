@@ -73,6 +73,8 @@ python main.py run \
   --log-dir logs/nonprofit_llm_benchmark_budget_compare
 ```
 
+If the chosen log directory already exists, it is replaced before the run so the benchmark does not reuse prior results from that directory. Otherwise a new directory is created and used.
+
 What this does:
 
 - resolves the selected task groups
