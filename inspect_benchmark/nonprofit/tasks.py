@@ -49,11 +49,17 @@ Use these labels only:
 
 Strict rules:
 - Do NOT award C if any core requirement in the criterion is missing.
+- Do NOT award C unless the answer includes concrete execution detail (timeline, ownership, measurable indicators, and practical constraints) when those are relevant to the prompt.
+- Default to P unless there is clear evidence the answer is fully task-complete.
+- To award C, require at least 3 concrete implementation details (for example: timeline, numeric target/KPI, named owner/role, decision trigger, review cadence, or explicit safeguard).
 - A generic answer like 'do outreach, improve messaging, train staff, build partnerships' is not C unless it is tied to the task, concrete actions, responsibilities, timelines, indicators, or safeguards required by the prompt.
 - If the task asks for measurable elements (targets, timeline, KPIs, controls, stakeholder roles, triggers, review cadence), absence of these should usually cap the score at P or I.
 - For privacy, fairness, eligibility, legal/compliance, or donor-facing risk scenarios, weak or missing safeguards should substantially reduce the score.
+- If the answer is fluent but lacks enough specific nonprofit execution details to be realistically actionable, score P rather than C.
 - Prefer P over C when the answer is directionally good but not fully task-complete.
 - Prefer I over P when the answer is largely generic, misses required deliverables, or overlooks critical risk requirements.
+- For high-risk tasks, if any critical safeguard is missing (for example consent/privacy controls, human review, escalation path, or compliance control), do not award C.
+- If an answer is off-task or mostly generic prose without operational decisions, score I.
 
 Write a brief rationale citing which task requirements were met versus missed.
 Always end with exactly one line: GRADE: <C|P|I>

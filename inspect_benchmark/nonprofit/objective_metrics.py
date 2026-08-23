@@ -158,6 +158,40 @@ def generic_template_penalty(text: str) -> bool:
     return generic_hits >= 2 and operational_hits + action_hits + (1 if numeric_hits else 0) <= 2
 
 
+def apply_strictness_caps(score: float, checks: dict[str, bool], risk_level: str) -> float:
+    """Apply hard caps when critical rubric requirements fail.
+
+    This intentionally makes top-end scores harder to achieve and helps separate
+    advanced models that are merely fluent from those that are task-complete.
+    """
+
+    critical_checks = [
+        "structured_response",
+        "task_specific_coverage",
+        "execution_realism",
+        "non_generic_template",
+    ]
+
+    # Quantitative requirements are critical when triggered by the task.
+    if "quantitative_signal" in checks:
+        critical_checks.append("quantitative_signal")
+
+    failed_critical = sum(1 for check in critical_checks if check in checks and not checks[check])
+
+    capped = score
+    if failed_critical >= 2:
+        capped = min(capped, 0.55)
+    elif failed_critical == 1:
+        capped = min(capped, 0.72)
+
+    if risk_level == "high":
+        # High-risk tasks require both safeguards and no unsafe shortcuts.
+        if not checks.get("high_risk_controls", False) or not checks.get("no_unsafe_shortcuts", False):
+            capped = min(capped, 0.5)
+
+    return capped
+
+
 @scorer(metrics=[mean_metric()], name="objective_rubric")
 def objective_rubric_scorer():
     """Score completions using deterministic rubric checks only."""
@@ -183,7 +217,7 @@ def objective_rubric_scorer():
         checks["area_keyword_coverage"] = _coverage_score(
             text,
             _AREA_KEYWORDS.get(task_area, []),
-            threshold=0.55 if difficulty == "hard" else 0.45,
+            threshold=0.65 if difficulty == "hard" else 0.55,
         )
 
         # If prompt/criterion imply quantitative planning, require at least one number.
@@ -192,31 +226,44 @@ def objective_rubric_scorer():
             prompt_text = state.input_text
         if _needs_numeric_content(prompt_text, target.text):
             number_hits = len(_NUMBER_RE.findall(text))
-            checks["quantitative_signal"] = number_hits >= (2 if difficulty == "hard" else 1)
+            checks["quantitative_signal"] = number_hits >= (3 if difficulty == "hard" else 2)
         else:
             checks["quantitative_signal"] = True
 
         # Task-specific realism: ask for concepts that are core to nonprofit execution.
         specific_terms = _TASK_SPECIFIC_REQUIREMENTS.get(task_area, [])
-        checks["task_specific_coverage"] = _coverage_score(text, specific_terms, threshold=0.5)
+        checks["task_specific_coverage"] = _coverage_score(
+            text,
+            specific_terms,
+            threshold=0.65 if difficulty == "hard" else 0.55,
+        )
 
         # Require evidence that the answer reflects operational constraints, not template advice.
-        checks["execution_realism"] = _coverage_score(text, _EXECUTION_REALISM_TERMS, threshold=0.2)
+        checks["execution_realism"] = _coverage_score(
+            text,
+            _EXECUTION_REALISM_TERMS,
+            threshold=0.28 if difficulty == "hard" else 0.24,
+        )
         checks["non_generic_template"] = not generic_template_penalty(text)
 
         # Language compliance for multilingual scenarios.
         checks["language_compliance"] = _language_check(text, language)
 
         # Actionability check to avoid generic prose.
-        checks["actionability"] = _coverage_score(text, _ACTION_VERBS, threshold=0.28)
+        checks["actionability"] = _coverage_score(
+            text,
+            _ACTION_VERBS,
+            threshold=0.36 if difficulty == "hard" else 0.3,
+        )
 
         # For high-risk tasks, require explicit risk-control terms.
         if risk_level == "high":
-            checks["high_risk_controls"] = _coverage_score(text, _HIGH_RISK_TERMS, threshold=0.35)
+            checks["high_risk_controls"] = _coverage_score(text, _HIGH_RISK_TERMS, threshold=0.45)
             lower = text.lower()
             checks["no_unsafe_shortcuts"] = not any(term in lower for term in _UNSAFE_SHORTCUT_TERMS)
 
         objective_value = mean(1.0 if passed else 0.0 for passed in checks.values()) if checks else 0.0
+        objective_value = apply_strictness_caps(objective_value, checks, risk_level)
         return Score(
             value=round(objective_value, 4),
             explanation="; ".join(f"{name}={'pass' if ok else 'fail'}" for name, ok in checks.items()),

@@ -1,6 +1,9 @@
 import unittest
 
-from inspect_benchmark.nonprofit.objective_metrics import generic_template_penalty
+from inspect_benchmark.nonprofit.objective_metrics import (
+    apply_strictness_caps,
+    generic_template_penalty,
+)
 from inspect_benchmark.nonprofit.task_bank import (
     build_context_variant,
     validate_task_bank,
@@ -55,6 +58,34 @@ class NonprofitTaskBankValidationTest(unittest.TestCase):
 
         self.assertTrue(generic_template_penalty(generic))
         self.assertFalse(generic_template_penalty(realistic))
+
+    def test_strictness_caps_reduce_score_when_critical_checks_fail(self):
+        score = 0.9
+        checks = {
+            "structured_response": False,
+            "task_specific_coverage": False,
+            "execution_realism": True,
+            "non_generic_template": True,
+            "quantitative_signal": True,
+        }
+
+        capped = apply_strictness_caps(score, checks, risk_level="low")
+        self.assertLessEqual(capped, 0.55)
+
+    def test_strictness_caps_enforce_high_risk_safeguard_ceiling(self):
+        score = 0.88
+        checks = {
+            "structured_response": True,
+            "task_specific_coverage": True,
+            "execution_realism": True,
+            "non_generic_template": True,
+            "quantitative_signal": True,
+            "high_risk_controls": False,
+            "no_unsafe_shortcuts": True,
+        }
+
+        capped = apply_strictness_caps(score, checks, risk_level="high")
+        self.assertLessEqual(capped, 0.5)
 
 
 if __name__ == "__main__":
