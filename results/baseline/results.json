@@ -1,0 +1,278 @@
+{
+  "log_dir": "logs/baseline,logs/baseline_more",
+  "organization": null,
+  "judge_model": "openai/gpt-4.1-mini",
+  "component_weights": {
+    "core": 0.6,
+    "knowledge": 0.1,
+    "truthfulness": 0.1,
+    "fairness": 0.1,
+    "calibrated_refusal": 0.1
+  },
+  "area_weights": {
+    "fundraising_strategy": 1.0,
+    "grant_writing": 1.0,
+    "operations_prioritization": 1.0,
+    "community_communications": 1.0,
+    "impact_measurement": 1.0,
+    "board_governance": 1.0,
+    "compliance_and_privacy": 1.0,
+    "finance_and_accounting": 1.0
+  },
+  "sample_weights": {
+    "judge": 0.6,
+    "objective": 0.4
+  },
+  "leaderboard": [
+    {
+      "model": "openai/gpt-5",
+      "composite": 0.8981,
+      "ci_low": 0.8685,
+      "ci_high": 0.9282,
+      "components": {
+        "calibrated_refusal": 0.7333,
+        "core": 0.928,
+        "fairness": 0.8889,
+        "knowledge": 0.9107,
+        "truthfulness": 0.88
+      },
+      "missing_components": [],
+      "n_samples": 256,
+      "rank": 1
+    },
+    {
+      "model": "openai/gpt-5-mini",
+      "composite": 0.8775,
+      "ci_low": 0.841,
+      "ci_high": 0.9108,
+      "components": {
+        "calibrated_refusal": 0.725,
+        "core": 0.9016,
+        "fairness": 0.9074,
+        "knowledge": 0.8929,
+        "truthfulness": 0.84
+      },
+      "missing_components": [],
+      "n_samples": 256,
+      "rank": 2
+    },
+    {
+      "model": "openai/gpt-5-nano",
+      "composite": 0.8697,
+      "ci_low": 0.8374,
+      "ci_high": 0.8987,
+      "components": {
+        "calibrated_refusal": 0.7167,
+        "core": 0.9116,
+        "fairness": 0.8889,
+        "knowledge": 0.8214,
+        "truthfulness": 0.8
+      },
+      "missing_components": [],
+      "n_samples": 256,
+      "rank": 3
+    },
+    {
+      "model": "openai/gpt-4.1",
+      "composite": 0.8236,
+      "ci_low": 0.7791,
+      "ci_high": 0.8629,
+      "components": {
+        "calibrated_refusal": 0.925,
+        "core": 0.8064,
+        "fairness": 0.8889,
+        "knowledge": 0.8036,
+        "truthfulness": 0.78
+      },
+      "missing_components": [],
+      "n_samples": 256,
+      "rank": 4
+    },
+    {
+      "model": "openai/gpt-4.1-mini",
+      "composite": 0.7916,
+      "ci_low": 0.7502,
+      "ci_high": 0.8371,
+      "components": {
+        "calibrated_refusal": 0.9083,
+        "core": 0.7555,
+        "fairness": 0.8889,
+        "knowledge": 0.7857,
+        "truthfulness": 0.8
+      },
+      "missing_components": [],
+      "n_samples": 256,
+      "rank": 5
+    },
+    {
+      "model": "openai/gpt-4o-mini",
+      "composite": 0.7372,
+      "ci_low": 0.6917,
+      "ci_high": 0.7805,
+      "components": {
+        "calibrated_refusal": 0.8583,
+        "core": 0.6737,
+        "fairness": 0.8519,
+        "knowledge": 0.8393,
+        "truthfulness": 0.78
+      },
+      "missing_components": [],
+      "n_samples": 256,
+      "rank": 6
+    }
+  ],
+  "areas": [
+    {
+      "model": "openai/gpt-4.1",
+      "fundraising_strategy": 0.8741,
+      "grant_writing": 0.9025,
+      "operations_prioritization": 0.7997,
+      "community_communications": 0.8963,
+      "impact_measurement": 0.6527,
+      "board_governance": 0.8818,
+      "compliance_and_privacy": 0.8529,
+      "finance_and_accounting": 0.5909
+    },
+    {
+      "model": "openai/gpt-4.1-mini",
+      "fundraising_strategy": 0.7327,
+      "grant_writing": 0.6865,
+      "operations_prioritization": 0.8601,
+      "community_communications": 0.8415,
+      "impact_measurement": 0.6205,
+      "board_governance": 0.8436,
+      "compliance_and_privacy": 0.8164,
+      "finance_and_accounting": 0.6426
+    },
+    {
+      "model": "openai/gpt-4o-mini",
+      "fundraising_strategy": 0.6748,
+      "grant_writing": 0.7705,
+      "operations_prioritization": 0.6454,
+      "community_communications": 0.6693,
+      "impact_measurement": 0.4213,
+      "board_governance": 0.6805,
+      "compliance_and_privacy": 0.8621,
+      "finance_and_accounting": 0.6659
+    },
+    {
+      "model": "openai/gpt-5",
+      "fundraising_strategy": 0.9875,
+      "grant_writing": 0.927,
+      "operations_prioritization": 0.9558,
+      "community_communications": 0.9736,
+      "impact_measurement": 0.904,
+      "board_governance": 0.9717,
+      "compliance_and_privacy": 0.9833,
+      "finance_and_accounting": 0.7209
+    },
+    {
+      "model": "openai/gpt-5-mini",
+      "fundraising_strategy": 0.9813,
+      "grant_writing": 0.902,
+      "operations_prioritization": 0.91,
+      "community_communications": 0.9423,
+      "impact_measurement": 0.872,
+      "board_governance": 0.98,
+      "compliance_and_privacy": 0.8197,
+      "finance_and_accounting": 0.8059
+    },
+    {
+      "model": "openai/gpt-5-nano",
+      "fundraising_strategy": 0.9062,
+      "grant_writing": 0.9365,
+      "operations_prioritization": 0.9208,
+      "community_communications": 0.9465,
+      "impact_measurement": 0.9103,
+      "board_governance": 0.98,
+      "compliance_and_privacy": 0.9033,
+      "finance_and_accounting": 0.7892
+    }
+  ],
+  "subsets": [
+    {
+      "model": "openai/gpt-4.1",
+      "trap": 0.6305,
+      "over_refusal": 0.9205,
+      "exact": 0.6691,
+      "high_risk": 0.852,
+      "judge_mean": 0.8162,
+      "objective_mean": 0.7907
+    },
+    {
+      "model": "openai/gpt-4.1-mini",
+      "trap": 0.558,
+      "over_refusal": 0.8637,
+      "exact": 0.7185,
+      "high_risk": 0.8038,
+      "judge_mean": 0.7538,
+      "objective_mean": 0.7601
+    },
+    {
+      "model": "openai/gpt-4o-mini",
+      "trap": 0.4225,
+      "over_refusal": 0.975,
+      "exact": 0.7091,
+      "high_risk": 0.6472,
+      "judge_mean": 0.6484,
+      "objective_mean": 0.6829
+    },
+    {
+      "model": "openai/gpt-5",
+      "trap": 0.8686,
+      "over_refusal": 1.0,
+      "exact": 0.7739,
+      "high_risk": 0.9719,
+      "judge_mean": 0.9612,
+      "objective_mean": 0.8797
+    },
+    {
+      "model": "openai/gpt-5-mini",
+      "trap": 0.9351,
+      "over_refusal": 0.7545,
+      "exact": 0.8306,
+      "high_risk": 0.8761,
+      "judge_mean": 0.939,
+      "objective_mean": 0.8506
+    },
+    {
+      "model": "openai/gpt-5-nano",
+      "trap": 0.8913,
+      "over_refusal": 0.88,
+      "exact": 0.8553,
+      "high_risk": 0.9145,
+      "judge_mean": 0.9482,
+      "objective_mean": 0.8603
+    }
+  ],
+  "diagnostics": {
+    "judge_objective_spearman": 0.384,
+    "graded_samples": 216,
+    "total_samples": 1536
+  },
+  "warnings": [
+    "Judge model openai/gpt-4.1-mini is also a candidate; its core/custom scores may carry self-preference bias."
+  ],
+  "external_sources": {
+    "knowledge": {
+      "source": "cais/mmlu",
+      "license": "MIT",
+      "citation": "Hendrycks et al., Measuring Massive Multitask Language Understanding, ICLR 2021"
+    },
+    "truthfulness": {
+      "source": "truthfulqa/truthful_qa (multiple_choice)",
+      "license": "Apache-2.0",
+      "citation": "Lin, Hilton & Evans, TruthfulQA: Measuring How Models Mimic Human Falsehoods, ACL 2022"
+    },
+    "fairness": {
+      "source": "heegyu/bbq",
+      "license": "CC-BY-4.0",
+      "citation": "Parrish et al., BBQ: A Hand-Built Bias Benchmark for Question Answering, ACL Findings 2022"
+    },
+    "calibrated_refusal": {
+      "source": "Paul/XSTest",
+      "license": "CC-BY-4.0",
+      "citation": "R\u00f6ttger et al., XSTest: A Test Suite for Identifying Exaggerated Safety Behaviours in LLMs, NAACL 2024"
+    }
+  }
+}

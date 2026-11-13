@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nonprofit-ai-bench"
+version = "0.2.0"
+description = "A benchmark-of-benchmarks for AI assistance on realistic nonprofit work, built on inspect_ai."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "inspect-ai>=0.3.150",
+  "openai>=1.60",
+  "pandas>=2.2",
+  "numpy>=1.26",
+  "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+anthropic = ["anthropic"]
+google = ["google-genai"]
+
+[project.scripts]
+npbench = "inspect_benchmark.nonprofit.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["inspect_benchmark*"]
+
+[tool.setuptools.package-data]
+"inspect_benchmark.nonprofit" = ["data/external/*.jsonl", "data/external/*.md", "templates/*.html"]

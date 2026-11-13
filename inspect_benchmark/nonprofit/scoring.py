@@ -1,8 +1,18 @@
-"""Composable scoring config for nonprofit benchmark evaluation.
+"""Composable scoring for the nonprofit benchmark-of-benchmarks.
 
-This keeps the current objective + judge hybrid model in place while making it
-simple to add more benchmark components later (for example external evaluator
-signals, domain rollups, or organization-specific weighting).
+Three levels:
+
+1. Sample score (core and custom tasks):
+       sample = 0.60 * rubric_judge + 0.40 * objective
+2. Core score: area-weighted mean of per-area mean sample scores (each area counts
+   equally by default; an org profile can re-weight or drop areas).
+3. Composite score: fixed weighted mean of components
+       core 0.60 | knowledge 0.10 | truthfulness 0.10 | fairness 0.10 | calibrated_refusal 0.10
+   A profile with custom tasks adds ``custom`` (0.25, taken from core) and applies
+   small transparent adjustments (see ``OrgProfile.component_weights``).
+
+Missing components are dropped and the remaining weights renormalised; the
+leaderboard flags such rows as incomplete.
 """
 
 from __future__ import annotations
@@ -10,10 +20,37 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, Mapping
 
+SAMPLE_WEIGHTS: dict[str, float] = {"judge": 0.60, "objective": 0.40}
+
+DEFAULT_COMPONENT_WEIGHTS: dict[str, float] = {
+    "core": 0.60,
+    "knowledge": 0.10,
+    "truthfulness": 0.10,
+    "fairness": 0.10,
+    "calibrated_refusal": 0.10,
+}
+
+COMPONENT_LABELS: dict[str, str] = {
+    "core": "Nonprofit core tasks",
+    "custom": "Org-specific tasks",
+    "knowledge": "Domain knowledge (MMLU)",
+    "truthfulness": "Truthfulness (TruthfulQA)",
+    "fairness": "Bias/fairness (BBQ)",
+    "calibrated_refusal": "Calibrated refusal (XSTest)",
+}
+
+
+def normalize_weights(weights: Mapping[str, float]) -> dict[str, float]:
+    clean = {k: max(0.0, float(v)) for k, v in weights.items()}
+    total = sum(clean.values())
+    if total <= 0:
+        raise ValueError("Weights must include at least one positive value.")
+    return {k: round(v / total, 4) for k, v in clean.items()}
+
 
 @dataclass(frozen=True)
 class ScoreComponent:
-    """A single signal contributing to the final benchmark score."""
+    """A single signal contributing to a weighted score."""
 
     name: str
     weight: float
@@ -30,53 +67,42 @@ class ScoreComponent:
 
 @dataclass(frozen=True)
 class BenchmarkScoringConfig:
-    """A weighted score composition that can grow over time.
-
-    The default configuration models the current nonprofit benchmark as a hybrid of
-    objective rubric performance and judge-based rubric quality, but the same
-    structure can be extended with future external benchmarks or specialized
-    signals without reworking leaderboard logic.
-    """
+    """Weighted composition over named components; missing components are renormalised away."""
 
     components: tuple[ScoreComponent, ...] = field(
-        default=(
-            ScoreComponent(name="objective", weight=0.65),
-            ScoreComponent(name="judge", weight=0.35),
-        )
+        default_factory=lambda: tuple(ScoreComponent(k, v) for k, v in SAMPLE_WEIGHTS.items())
     )
 
-    def score(self, values: Mapping[str, float]) -> float:
-        total_weight = sum(component.weight for component in self.components)
+    @classmethod
+    def from_weights(cls, weights: Mapping[str, float]) -> "BenchmarkScoringConfig":
+        return cls(components=tuple(ScoreComponent(name, w) for name, w in weights.items()))
+
+    def weights(self) -> dict[str, float]:
+        return {c.name: c.weight for c in self.components}
+
+    def score(self, values: Mapping[str, float | None]) -> float:
+        present = [c for c in self.components if values.get(c.name) is not None and c.weight > 0]
+        total_weight = sum(c.weight for c in present)
         if total_weight <= 0:
-            raise ValueError("Scoring config must include positive component weights.")
-
-        weighted = 0.0
-        for component in self.components:
-            if component.name not in values:
-                continue
-            weighted += component.weight * component.normalize(values[component.name])
-
-        if not weighted:
             return 0.0
+        return sum(c.weight * c.normalize(values[c.name]) for c in present) / total_weight
 
-        return weighted / total_weight
+    def missing(self, values: Mapping[str, float | None]) -> list[str]:
+        return [c.name for c in self.components if c.weight > 0 and values.get(c.name) is None]
 
 
 def default_scoring_config() -> BenchmarkScoringConfig:
-    """Default nonprofit benchmark weighting used across the repo."""
+    """Per-sample judge/objective blend used for core and custom tasks."""
 
-    return BenchmarkScoringConfig(
-        components=(
-            ScoreComponent(name="objective", weight=0.65),
-            ScoreComponent(name="judge", weight=0.35),
-        )
-    )
+    return BenchmarkScoringConfig.from_weights(SAMPLE_WEIGHTS)
+
+
+def composite_scoring_config(weights: Mapping[str, float] | None = None) -> BenchmarkScoringConfig:
+    return BenchmarkScoringConfig.from_weights(weights or DEFAULT_COMPONENT_WEIGHTS)
 
 
 def build_composite_score(
     values: Mapping[str, float],
     config: BenchmarkScoringConfig | None = None,
 ) -> float:
-    """Compute a weighted composite score for a set of component values."""
-
     return (config or default_scoring_config()).score(values)

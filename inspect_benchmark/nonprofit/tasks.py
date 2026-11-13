@@ -1,16 +1,18 @@
-"""Inspect task definitions for nonprofit LLM-vs-LLM benchmarking."""
+"""Inspect task definitions for the nonprofit core suite and org-specific custom tasks."""
 
 from __future__ import annotations
 
-from typing import Iterable, List
+from dataclasses import asdict
+from typing import Iterable
 
 from inspect_ai import Task, task
-from inspect_ai.dataset import Sample
-from inspect_ai.scorer import model_graded_qa
+from inspect_ai.dataset import MemoryDataset, Sample
+from inspect_ai.model import GenerateConfig
 from inspect_ai.solver import generate, system_message
 
+from .judge import rubric_judge_scorer
 from .objective_metrics import objective_rubric_scorer
-from .task_bank import NonprofitSampleSpec, all_samples, samples_for_areas
+from .task_bank import AREA_ALIASES, NonprofitSampleSpec, all_samples, filter_samples
 
 SYSTEM_PROMPT = """
 You are an expert nonprofit strategy advisor.
@@ -18,55 +20,11 @@ Give practical, concrete recommendations suitable for real nonprofit teams.
 Prioritize safety, dignity, and realistic execution over generic advice.
 """.strip()
 
-GRADER_TEMPLATE = """
-You are grading an answer from an LLM benchmark about nonprofit strategy.
-
-Task prompt:
-{question}
-
-Rubric criterion:
-{criterion}
-
-Reference answer (for calibration only, not strict wording):
-{reference_answer}
-
-Model answer:
-{answer}
-
-Instructions for grading:
-{instructions}
-""".strip()
-
-GRADER_INSTRUCTIONS = """
-You are a strict evaluator using professor-style grading for nonprofit strategy tasks.
-
-Evaluate the answer against the actual task criterion, not against general quality. A strong answer must address the specific nonprofit problem, required actions, and risk considerations in the prompt.
-
-Use these labels only:
-- C: Fully satisfies all core criterion requirements with concrete, realistic, and actionable details. The answer directly addresses the task, includes required execution details, and includes the right safeguards or implementation specifics when the task calls for them.
-- P: Mostly relevant and useful, but misses one or more important criterion elements, is too generic, or lacks concrete implementation details needed for real nonprofit execution.
-- I: Fails the task, omits critical requirements, is generic filler, unsafe, off-task, or includes harmful/noncompliant guidance.
-
-Strict rules:
-- Do NOT award C if any core requirement in the criterion is missing.
-- Do NOT award C unless the answer includes concrete execution detail (timeline, ownership, measurable indicators, and practical constraints) when those are relevant to the prompt.
-- Default to P unless there is clear evidence the answer is fully task-complete.
-- To award C, require at least 3 concrete implementation details (for example: timeline, numeric target/KPI, named owner/role, decision trigger, review cadence, or explicit safeguard).
-- A generic answer like 'do outreach, improve messaging, train staff, build partnerships' is not C unless it is tied to the task, concrete actions, responsibilities, timelines, indicators, or safeguards required by the prompt.
-- If the task asks for measurable elements (targets, timeline, KPIs, controls, stakeholder roles, triggers, review cadence), absence of these should usually cap the score at P or I.
-- For privacy, fairness, eligibility, legal/compliance, or donor-facing risk scenarios, weak or missing safeguards should substantially reduce the score.
-- If the answer is fluent but lacks enough specific nonprofit execution details to be realistically actionable, score P rather than C.
-- Prefer P over C when the answer is directionally good but not fully task-complete.
-- Prefer I over P when the answer is largely generic, misses required deliverables, or overlooks critical risk requirements.
-- For high-risk tasks, if any critical safeguard is missing (for example consent/privacy controls, human review, escalation path, or compliance control), do not award C.
-- If an answer is off-task or mostly generic prose without operational decisions, score I.
-
-Write a brief rationale citing which task requirements were met versus missed.
-Always end with exactly one line: GRADE: <C|P|I>
-""".strip()
+# Generous cap: reasoning models spend most tokens thinking; non-reasoning models stop far below it.
+DEFAULT_MAX_TOKENS = 16000
 
 
-def _to_sample(spec: NonprofitSampleSpec) -> Sample:
+def to_sample(spec: NonprofitSampleSpec) -> Sample:
     return Sample(
         id=spec.sample_id,
         input=spec.prompt,
@@ -77,66 +35,85 @@ def _to_sample(spec: NonprofitSampleSpec) -> Sample:
             "language": spec.language,
             "risk_level": spec.risk_level,
             "reference_answer": spec.reference_answer,
+            "tags": list(spec.tags),
+            "source": spec.source,
+            "rubric": [asdict(item) for item in spec.rubric],
+            "checks": [{**asdict(c), "patterns": list(c.patterns)} for c in spec.checks],
         },
     )
 
 
-def _limit(samples: List[Sample], limit: int | None) -> List[Sample]:
-    if limit is None or limit <= 0:
-        return samples
-    return samples[:limit]
-
-
-def _build_task(samples: Iterable[NonprofitSampleSpec], limit: int | None = None) -> Task:
-    mapped = [_to_sample(sample) for sample in samples]
-    dataset = _limit(mapped, limit)
+def build_task(
+    samples: Iterable[NonprofitSampleSpec],
+    *,
+    name: str,
+    suite: str,
+    limit: int | None = None,
+    judge_model: str | None = None,
+) -> Task:
+    mapped = [to_sample(s) for s in samples]
+    if limit and limit > 0:
+        mapped = mapped[:limit]
+    if not mapped:
+        raise ValueError(f"Task {name} has no samples after filtering.")
     return Task(
-        dataset=dataset,
+        dataset=MemoryDataset(mapped, name=name),
         solver=[system_message(SYSTEM_PROMPT), generate()],
-        scorer=[
-            model_graded_qa(template=GRADER_TEMPLATE, instructions=GRADER_INSTRUCTIONS, partial_credit=True),
-            objective_rubric_scorer(),
-        ],
+        scorer=[rubric_judge_scorer(judge_model=judge_model), objective_rubric_scorer()],
+        config=GenerateConfig(max_tokens=DEFAULT_MAX_TOKENS),
+        metadata={"suite": suite},
+        name=name,
     )
+
+
+def _split(value: str | list[str] | None) -> list[str] | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return [v.strip() for v in value.split(",") if v.strip()]
+    return list(value)
+
+
+@task
+def nonprofit_core(
+    areas: str | list[str] | None = None,
+    languages: str | list[str] | None = None,
+    tags: str | list[str] | None = None,
+    limit: int | None = None,
+    judge_model: str | None = None,
+) -> Task:
+    """Full nonprofit core suite (optionally filtered by area, language or tag)."""
+
+    areas_list = _split(areas)
+    if areas_list and "all" in areas_list:
+        areas_list = None
+    samples = filter_samples(all_samples(), areas=areas_list, languages=_split(languages), tags=_split(tags))
+    return build_task(samples, name="nonprofit_core", suite="core", limit=limit, judge_model=judge_model)
+
+
+def custom_task(samples: list[NonprofitSampleSpec], judge_model: str | None = None) -> Task:
+    return build_task(samples, name="nonprofit_custom", suite="custom", judge_model=judge_model)
+
+
+# Backwards-compatible per-area tasks (e.g. `inspect eval inspect_benchmark/nonprofit/tasks.py@nonprofit_grants`).
+def _area_task(alias: str):
+    def _fn(limit: int | None = None) -> Task:
+        return nonprofit_core(areas=[AREA_ALIASES[alias]], limit=limit)
+
+    _fn.__name__ = f"nonprofit_{alias}"
+    return task(_fn)
+
+
+nonprofit_fundraising = _area_task("fundraising")
+nonprofit_grants = _area_task("grants")
+nonprofit_operations = _area_task("operations")
+nonprofit_communications = _area_task("communications")
+nonprofit_impact = _area_task("impact")
+nonprofit_governance = _area_task("governance")
+nonprofit_compliance = _area_task("compliance")
+nonprofit_finance = _area_task("finance")
 
 
 @task
 def nonprofit_all(limit: int | None = None) -> Task:
-    """Full nonprofit benchmark task across all strategy domains."""
-
-    return _build_task(all_samples(), limit=limit)
-
-
-@task
-def nonprofit_fundraising(limit: int | None = None) -> Task:
-    return _build_task(samples_for_areas(["fundraising_strategy"]), limit=limit)
-
-
-@task
-def nonprofit_grants(limit: int | None = None) -> Task:
-    return _build_task(samples_for_areas(["grant_writing"]), limit=limit)
-
-
-@task
-def nonprofit_operations(limit: int | None = None) -> Task:
-    return _build_task(samples_for_areas(["operations_prioritization"]), limit=limit)
-
-
-@task
-def nonprofit_communications(limit: int | None = None) -> Task:
-    return _build_task(samples_for_areas(["community_communications"]), limit=limit)
-
-
-@task
-def nonprofit_impact(limit: int | None = None) -> Task:
-    return _build_task(samples_for_areas(["impact_measurement"]), limit=limit)
-
-
-@task
-def nonprofit_governance(limit: int | None = None) -> Task:
-    return _build_task(samples_for_areas(["board_governance"]), limit=limit)
-
-
-@task
-def nonprofit_compliance(limit: int | None = None) -> Task:
-    return _build_task(samples_for_areas(["compliance_and_privacy"]), limit=limit)
+    return nonprofit_core(limit=limit)

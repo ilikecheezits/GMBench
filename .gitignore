@@ -1,7 +1,10 @@
 .env
+.venv/
 __pycache__/
-*/__pycache__/
 *.pyc
+*.egg-info/
+build/
+dist/
 artifacts/
 logs/
-notes
+profiles/

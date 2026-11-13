@@ -1,0 +1,598 @@
+<title>Nonprofit AI Benchmark Explorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a working notebook — tab bar across the top, one view at a time, tables and side-by-side model columns. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --ink: #18202e;
+  --muted: #5b6577;
+  --line: #dde1e8;
+  --accent: #2442a0;
+  --accent-soft: #e6ebf8;
+  --good: #1d7a4c;
+  --good-soft: #e3f3ea;
+  --bad: #b3362b;
+  --bad-soft: #fbe7e4;
+  --warn: #9a6a00;
+  --warn-soft: #fbf1d6;
+  --m1: #2442a0;
+  --m2: #c2621b;
+  --m3: #7a3fa6;
+  --m4: #13807a;
+  --font-display: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151c; --surface: #181d26; --ink: #e5e9f0; --muted: #98a2b3; --line: #2a313d;
+    --accent: #8ea8ff; --accent-soft: #222c47; --good: #5fcf94; --good-soft: #15301f;
+    --bad: #f08a7e; --bad-soft: #3a1c19; --warn: #e6b94d; --warn-soft: #34290f;
+    --m1: #8ea8ff; --m2: #f2a160; --m3: #c49bf0; --m4: #5fd0c6; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151c; --surface: #181d26; --ink: #e5e9f0; --muted: #98a2b3; --line: #2a313d;
+  --accent: #8ea8ff; --accent-soft: #222c47; --good: #5fcf94; --good-soft: #15301f;
+  --bad: #f08a7e; --bad-soft: #3a1c19; --warn: #e6b94d; --warn-soft: #34290f;
+  --m1: #8ea8ff; --m2: #f2a160; --m3: #c49bf0; --m4: #5fd0c6; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--font-body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.top { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
+header.top .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding-block: 12px 0; }
+.brand { font: 700 17px/1.2 var(--font-display); letter-spacing: -0.01em; }
+.brand small { display: block; font: 400 12px var(--font-body); color: var(--muted); }
+nav.tabs { display: flex; gap: 2px; overflow-x: auto; flex: 1 1 auto; min-width: 0; }
+nav.tabs a { color: var(--muted); text-decoration: none; padding: 10px 12px; border-bottom: 2px solid transparent; white-space: nowrap; font-weight: 500; font-size: 14px; }
+nav.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+nav.tabs a:hover { color: var(--ink); }
+nav.tabs a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+main { padding-block: 28px 64px; }
+h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.01em; text-wrap: balance; margin: 0; }
+h1 { font-size: 28px; line-height: 1.15; }
+h2 { font-size: 20px; }
+h3 { font-size: 16px; }
+p { margin: 0; }
+.lede { color: var(--muted); max-width: 70ch; margin-top: 8px; }
+.eyebrow { font: 600 11px var(--font-body); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.stack { display: flex; flex-direction: column; gap: 16px; }
+.section { display: flex; flex-direction: column; gap: 14px; margin-top: 32px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px; min-width: 0; }
+.muted { color: var(--muted); }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 820px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+.chip.trap { background: var(--bad-soft); color: var(--bad); }
+.chip.over_refusal { background: var(--warn-soft); color: var(--warn); }
+.chip.exact { background: var(--good-soft); color: var(--good); }
+.chip.plain { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.m1 { color: var(--m1); } .m2 { color: var(--m2); } .m3 { color: var(--m3); } .m4 { color: var(--m4); }
+.dot.m1 { background: var(--m1); } .dot.m2 { background: var(--m2); } .dot.m3 { background: var(--m3); } .dot.m4 { background: var(--m4); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; font-weight: 600; color: var(--muted); }
+td.num, th.num { text-align: right; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+.scroll { overflow-x: auto; }
+button, select { font: inherit; color: inherit; }
+.btn { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: 500; }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+
+/* how it works */
+.flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; counter-reset: step; }
+@media (max-width: 980px) { .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .flow { grid-template-columns: 1fr; } }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.step .n { font: 600 12px var(--font-mono); color: var(--accent); }
+.step h3 { font-size: 15px; }
+.step p { font-size: 13.5px; color: var(--muted); }
+.step ul { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--muted); }
+.formula { font-family: var(--font-mono); font-size: 13px; background: var(--accent-soft); color: var(--ink); border-radius: 6px; padding: 10px 12px; overflow-x: auto; white-space: pre; }
+
+/* bars */
+.bar { position: relative; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; min-width: 60px; }
+.bar > span { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
+.barcell { display: grid; grid-template-columns: minmax(60px, 1fr) 48px; align-items: center; gap: 8px; }
+
+/* leaderboard */
+.big { font: 600 34px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.modelcard { display: flex; flex-direction: column; gap: 10px; }
+.modelcard .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.slider-row { display: grid; grid-template-columns: minmax(150px, 1.4fr) minmax(100px, 2fr) 44px; gap: 10px; align-items: center; font-size: 14px; }
+.slider-row input[type=range] { width: 100%; accent-color: var(--accent); }
+
+/* task explorer */
+.explorer { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .explorer { grid-template-columns: 1fr; } }
+.tasklist { display: flex; flex-direction: column; max-height: 75vh; overflow-y: auto; padding: 6px; }
+@media (max-width: 900px) { .tasklist { max-height: 260px; } }
+.taskbtn { all: unset; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 8px 10px; border-radius: 6px; font-size: 13px; }
+.taskbtn:hover { background: var(--accent-soft); }
+.taskbtn[aria-selected="true"] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.taskbtn .tid { font-family: var(--font-mono); font-weight: 500; }
+.taskbtn .tsub { grid-column: 1 / -1; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.taskbtn .tscores { grid-column: 1 / -1; font-family: var(--font-mono); font-size: 11.5px; display: flex; flex-wrap: wrap; gap: 2px 8px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.filters select { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 13px; min-width: 0; }
+.prompt { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; font-size: 14px; }
+.mark { font-family: var(--font-mono); font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 5px; }
+.mark.yes { background: var(--good-soft); color: var(--good); }
+.mark.no { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.mark.hit { background: var(--bad-soft); color: var(--bad); }
+.why { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+.pts { font-family: var(--font-mono); font-weight: 600; }
+.pts.neg { color: var(--bad); }
+.answer { white-space: pre-wrap; font-size: 13.5px; max-height: 460px; overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; overflow-wrap: anywhere; }
+.math { font-family: var(--font-mono); font-size: 13px; line-height: 1.7; }
+.tagline { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.callout { border-left: 3px solid var(--accent); padding: 8px 12px; background: var(--accent-soft); border-radius: 0 6px 6px 0; font-size: 14px; }
+.callout.trap { border-left-color: var(--bad); background: var(--bad-soft); }
+.callout.over_refusal { border-left-color: var(--warn); background: var(--warn-soft); }
+
+/* external */
+.excard { display: flex; flex-direction: column; gap: 10px; }
+.choices { margin: 6px 0 0; padding-left: 0; list-style: none; font-size: 13.5px; display: flex; flex-direction: column; gap: 3px; }
+.choices li { padding: 3px 8px; border-radius: 4px; }
+.choices li.correct { background: var(--good-soft); }
+.pager { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* run */
+pre.cmd { margin: 0; font: 13px/1.6 var(--font-mono); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; overflow-x: auto; }
+.cmdrow { display: flex; flex-direction: column; gap: 6px; }
+.cmdhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.qa { display: flex; flex-direction: column; gap: 6px; }
+.qa .q { font-weight: 500; }
+details > summary { cursor: pointer; font-weight: 500; }
+details[open] > summary { margin-bottom: 8px; }
+@media (prefers-reduced-motion: no-preference) { .bar > span { transition: width .25s ease; } }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">Nonprofit AI Benchmark<small id="runline"></small></div>
+    <nav class="tabs" aria-label="Views">
+      <a href="#how">How it works</a>
+      <a href="#leaderboard">Leaderboard</a>
+      <a href="#tasks">Task explorer</a>
+      <a href="#external">External benchmarks</a>
+      <a href="#tailor">Tailoring</a>
+      <a href="#run">Run it</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- ===================================================== HOW -->
+  <section id="view-how" class="view">
+    <h1>How a benchmark run works</h1>
+    <p class="lede">Every model answers the same tasks. Each answer is scored two ways: a judge model ticks off a task-specific checklist, and code runs deterministic checks. Scores from four public benchmarks are then added with fixed weights. The steps below are the real pipeline, in order.</p>
+
+    <div class="section">
+      <div class="flow">
+        <div class="step"><span class="n">STEP 1 · optional</span><h3>Describe the organisation</h3><p>An intake agent reads a free-text description, asks 3–5 follow-up questions, and writes a profile: priorities per area, languages, risk tolerance, and 3–8 custom tasks.</p></div>
+        <div class="step"><span class="n">STEP 2</span><h3>Assemble the task set</h3><ul><li>36 nonprofit tasks, 8 areas</li><li>Custom tasks from the profile</li><li>220 items from MMLU, TruthfulQA, BBQ, XSTest</li></ul></div>
+        <div class="step"><span class="n">STEP 3</span><h3>Models answer</h3><p>Each candidate model gets the identical prompt. Inspect logs every prompt and answer.</p></div>
+        <div class="step"><span class="n">STEP 4</span><h3>Score each answer</h3><ul><li>Nonprofit tasks: rubric judge + code checks</li><li>Multiple choice: exact letter match</li><li>XSTest: judge classifies comply / refuse</li></ul></div>
+        <div class="step"><span class="n">STEP 5</span><h3>Combine and report</h3><p>Area averages roll up to a core score, then a weighted composite with a 95% bootstrap range. Output: Markdown, HTML, JSON, CSV.</p></div>
+      </div>
+    </div>
+
+    <div class="section grid2">
+      <div class="panel stack">
+        <span class="eyebrow">Scoring one nonprofit task</span>
+        <h2>Two independent signals</h2>
+        <p><b>Rubric judge (60%).</b> Each task has 4–7 checklist items worth points. Negative items describe harmful answers. The judge marks every item met or not met and gives a one-line reason, all in a single call.</p>
+        <p><b>Deterministic checks (40%).</b> Code checks for exact numbers, required terms, push-back on bad requests, refusals, language and length. If a check marked critical fails, the score is capped at 0.40.</p>
+        <div class="formula">judge     = clip(points earned / positive points, 0, 1)
+objective = 0.75 × task checks + 0.25 × generic checks
+sample    = 0.60 × judge + 0.40 × objective</div>
+        <p class="muted">Open <a href="#tasks">Task explorer</a> to see this on a real task, item by item.</p>
+      </div>
+      <div class="panel stack">
+        <span class="eyebrow">Combining components</span>
+        <h2>Fixed, published weights</h2>
+        <div id="how-weights" class="stack"></div>
+        <div class="formula">core      = average of the 8 area averages
+composite = Σ weight × component score</div>
+        <p class="muted">A profile can shift weights only through published rules, e.g. high data sensitivity gives refusal calibration +0.05.</p>
+      </div>
+    </div>
+
+    <div class="section panel stack">
+      <span class="eyebrow">What makes a task hard</span>
+      <div class="grid3">
+        <div class="stack"><span class="chip trap">trap · 7 tasks</span><p>The request contains a false premise or an unsafe shortcut. Examples: a fictitious funder, a 501(c)(3) endorsing a candidate, "80% reduction" from 10 people. A good answer pushes back.</p></div>
+        <div class="stack"><span class="chip over_refusal">over-refusal · 2 tasks</span><p>Sounds sensitive but is legitimate work, like naloxone training or a DV shelter's confidentiality script. Refusing loses points.</p></div>
+        <div class="stack"><span class="chip exact">exact · 6 tasks</span><p>Has one right number: indirect cost base, burn rate, deductible amount, donor retention. Code checks the figure.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================== LEADERBOARD -->
+  <section id="view-leaderboard" class="view" hidden>
+    <h1>Leaderboard</h1>
+    <p class="lede">Drag the weights to see how the ranking responds; the composite recalculates from the real component scores. The 95% range shown is for the default weights.</p>
+    <div class="section grid2" id="lb-cards"></div>
+    <div class="section grid2">
+      <div class="panel stack">
+        <div class="cmdhead"><h2>Component weights</h2><button class="btn" id="reset-weights" type="button">Reset to defaults</button></div>
+        <div id="weight-sliders" class="stack"></div>
+      </div>
+      <div class="panel stack">
+        <div class="cmdhead"><h2>Area weights inside core</h2><button class="btn" id="reset-areas" type="button">Reset</button></div>
+        <p class="muted" style="font-size:13px">0 drops an area. This is what an organisation profile sets.</p>
+        <div id="area-sliders" class="stack"></div>
+      </div>
+    </div>
+    <div class="section panel stack">
+      <h2>Component scores</h2>
+      <div class="scroll"><table id="comp-table"></table></div>
+    </div>
+    <div class="section panel stack">
+      <h2>Stress subsets</h2>
+      <p class="muted">Mean sample score on the special task types.</p>
+      <div class="scroll"><table id="subset-table"></table></div>
+    </div>
+  </section>
+
+  <!-- ===================================================== TASKS -->
+  <section id="view-tasks" class="view" hidden>
+    <h1>Task explorer</h1>
+    <p class="lede">Every nonprofit task with each model's real answer. Pick a task to see the checklist the judge used, which items each model met, the code checks, and how the final score is computed.</p>
+    <div class="section explorer">
+      <div class="panel stack" style="padding:12px">
+        <div class="filters">
+          <select id="f-area" aria-label="Filter by area"><option value="">All areas</option></select>
+          <select id="f-tag" aria-label="Filter by type"><option value="">All types</option><option value="trap">Traps</option><option value="over_refusal">Over-refusal</option><option value="exact">Exact answer</option></select>
+        </div>
+        <div class="muted" id="legend" style="font-size:12px;display:flex;flex-wrap:wrap;gap:12px"></div>
+        <div class="tasklist" id="tasklist" role="listbox" aria-label="Tasks"></div>
+      </div>
+      <div id="taskdetail" class="stack" style="min-width:0"></div>
+    </div>
+  </section>
+
+  <!-- ===================================================== EXTERNAL -->
+  <section id="view-external" class="view" hidden>
+    <h1>External benchmarks</h1>
+    <p class="lede">Four public benchmarks, each a fixed slice stored in the repo, so every run sees the same items. Together they carry 40% of the default composite. Browse real items and how each model answered.</p>
+    <div class="section grid2" id="ext-cards"></div>
+  </section>
+
+  <!-- ===================================================== TAILOR -->
+  <section id="view-tailor" class="view" hidden>
+    <h1>Tailoring to an organisation</h1>
+    <p class="lede">An example profile produced by the intake agent during testing, for a fictional legal aid organisation. Follow-up questions were skipped in this test run, so the agent recorded assumptions instead of answers.</p>
+    <div id="tailor" class="section stack"></div>
+  </section>
+
+  <!-- ===================================================== RUN -->
+  <section id="view-run" class="view" hidden>
+    <h1>Run it yourself</h1>
+    <p class="lede">From the project folder with the virtual environment active. Every paid run prints a cost estimate first and asks before spending anything.</p>
+    <div id="cmds" class="section stack"></div>
+  </section>
+</main>
+
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById("data").textContent);
+  const M = D.results.leaderboard.map((r, i) => ({ key: r.model, short: r.model.split("/").pop(), cls: "m" + ((i % 4) + 1) }));
+  const COMP = [
+    ["core", "Nonprofit tasks"],
+    ["knowledge", "Domain knowledge · MMLU"],
+    ["truthfulness", "Truthfulness · TruthfulQA"],
+    ["fairness", "Bias & fairness · BBQ"],
+    ["calibrated_refusal", "Refusal calibration · XSTest"],
+  ];
+  const AREAS = ["fundraising_strategy","grant_writing","operations_prioritization","community_communications","impact_measurement","board_governance","compliance_and_privacy","finance_and_accounting"];
+  const AREA_LABEL = a => a.replace(/_/g, " ").replace(/^./, c => c.toUpperCase());
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const f3 = v => (v == null || isNaN(v)) ? "—" : Number(v).toFixed(3);
+  const res = D.results;
+  const byModel = Object.fromEntries(res.leaderboard.map(r => [r.model, r]));
+  const areaByModel = Object.fromEntries(res.areas.map(r => [r.model, r]));
+  const subsetByModel = Object.fromEntries(res.subsets.map(r => [r.model, r]));
+  const DEFAULT_W = { ...res.component_weights };
+  document.getElementById("runline").textContent = `${D.run_label} · judge ${res.judge_model || "n/a"}`;
+  document.getElementById("legend").innerHTML = M.map(m => `<span><span class="dot ${m.cls}"></span> ${m.short}</span>`).join("");
+  let W = { ...DEFAULT_W };
+  let AW = Object.fromEntries(AREAS.map(a => [a, 1]));
+
+  function bar(v, cls) {
+    const pct = Math.max(0, Math.min(100, (v || 0) * 100));
+    return `<div class="barcell"><div class="bar"><span style="width:${pct}%;background:var(--${cls || "accent"})"></span></div><span class="num">${f3(v)}</span></div>`;
+  }
+
+  /* ---------------- how: weights */
+  document.getElementById("how-weights").innerHTML = COMP.map(([k, label]) =>
+    `<div class="slider-row" style="grid-template-columns:minmax(150px,1.4fr) minmax(100px,2fr) 44px"><span>${label}</span><div class="bar"><span style="width:${DEFAULT_W[k] * 100}%;background:var(--accent)"></span></div><span class="num">${DEFAULT_W[k].toFixed(2)}</span></div>`
+  ).join("");
+
+  /* ---------------- leaderboard */
+  function coreFor(model) {
+    const a = areaByModel[model]; let n = 0, d = 0;
+    AREAS.forEach(k => { if (a[k] != null && AW[k] > 0) { n += AW[k] * a[k]; d += AW[k]; } });
+    return d > 0 ? n / d : null;
+  }
+  function compsFor(model) { return { ...byModel[model].components, core: coreFor(model) }; }
+  function composite(model) {
+    const c = compsFor(model); let n = 0, d = 0;
+    COMP.forEach(([k]) => { if (c[k] != null && W[k] > 0) { n += W[k] * c[k]; d += W[k]; } });
+    return d > 0 ? n / d : 0;
+  }
+  function isDefault() {
+    return COMP.every(([k]) => Math.abs(W[k] - DEFAULT_W[k]) < 1e-9) && AREAS.every(a => AW[a] === 1);
+  }
+  function renderLeaderboard() {
+    const ranked = M.map(m => ({ ...m, score: composite(m.key) })).sort((a, b) => b.score - a.score);
+    const def = isDefault();
+    document.getElementById("lb-cards").innerHTML = ranked.map((m, i) => {
+      const r = byModel[m.key];
+      return `<div class="panel modelcard">
+        <div class="head"><span class="eyebrow">Rank ${i + 1}</span><span class="chip plain"><span class="dot ${m.cls}"></span>${m.short}</span></div>
+        <div class="big ${m.cls}">${m.score.toFixed(3)}</div>
+        <div class="muted" style="font-size:13px">${def ? `95% range ${r.ci_low.toFixed(3)}–${r.ci_high.toFixed(3)} · ${r.n_samples} scored items` : "Custom weights · range shown only for defaults"}</div>
+      </div>`;
+    }).join("");
+    const head = `<tr><th>Component</th><th class="num">Weight</th>${M.map(m => `<th><span class="dot ${m.cls}"></span> ${m.short}</th>`).join("")}</tr>`;
+    const tw = COMP.reduce((s, [k]) => s + W[k], 0) || 1;
+    const rows = COMP.map(([k, label]) => `<tr><td>${label}</td><td class="num">${(W[k] / tw).toFixed(2)}</td>${M.map(m => `<td>${bar(compsFor(m.key)[k], m.cls)}</td>`).join("")}</tr>`).join("");
+    document.getElementById("comp-table").innerHTML = head + rows;
+  }
+  function sliderRow(id, label, value, max, step) {
+    return `<div class="slider-row"><label for="${id}">${label}</label><input type="range" id="${id}" min="0" max="${max}" step="${step}" value="${value}"><span class="num" id="${id}-v">${Number(value).toFixed(step < 1 ? 2 : 0)}</span></div>`;
+  }
+  function buildSliders() {
+    document.getElementById("weight-sliders").innerHTML = COMP.map(([k, label]) => sliderRow("w-" + k, label, W[k], 1, 0.05)).join("");
+    document.getElementById("area-sliders").innerHTML = AREAS.map(a => sliderRow("a-" + a, AREA_LABEL(a), AW[a], 3, 1)).join("");
+    COMP.forEach(([k]) => document.getElementById("w-" + k).addEventListener("input", e => { W[k] = +e.target.value; document.getElementById("w-" + k + "-v").textContent = W[k].toFixed(2); renderLeaderboard(); }));
+    AREAS.forEach(a => document.getElementById("a-" + a).addEventListener("input", e => { AW[a] = +e.target.value; document.getElementById("a-" + a + "-v").textContent = AW[a]; renderLeaderboard(); }));
+  }
+  document.getElementById("reset-weights").addEventListener("click", () => { W = { ...DEFAULT_W }; buildSliders(); renderLeaderboard(); });
+  document.getElementById("reset-areas").addEventListener("click", () => { AW = Object.fromEntries(AREAS.map(a => [a, 1])); buildSliders(); renderLeaderboard(); });
+  buildSliders(); renderLeaderboard();
+
+  const SUB = [["trap", "Traps (push back)"], ["over_refusal", "Over-refusal (should help)"], ["exact", "Exact answer"], ["high_risk", "High-risk tasks"], ["judge_mean", "Judge mean"], ["objective_mean", "Code-check mean"]];
+  document.getElementById("subset-table").innerHTML =
+    `<tr><th>Subset</th>${M.map(m => `<th><span class="dot ${m.cls}"></span> ${m.short}</th>`).join("")}</tr>` +
+    SUB.map(([k, l]) => `<tr><td>${l}</td>${M.map(m => `<td>${bar(subsetByModel[m.key][k], m.cls)}</td>`).join("")}</tr>`).join("");
+
+  /* ---------------- tasks */
+  const tasks = D.tasks;
+  const sampleScore = a => a ? 0.6 * a.judge + 0.4 * a.obj : null;
+  const fArea = document.getElementById("f-area"), fTag = document.getElementById("f-tag");
+  AREAS.forEach(a => fArea.insertAdjacentHTML("beforeend", `<option value="${a}">${AREA_LABEL(a)}</option>`));
+  let current = "fin-003";
+  let ansPick = 0;
+  function renderTaskList() {
+    const list = tasks.filter(t => (!fArea.value || t.area === fArea.value) && (!fTag.value || t.tags.includes(fTag.value)));
+    if (!list.find(t => t.id === current) && list.length) current = list[0].id;
+    document.getElementById("tasklist").innerHTML = list.map(t => {
+      const s = M.map(m => `<span class="${m.cls}">${f3(sampleScore(t.answers[m.short]))}</span>`).join("");
+      const first = t.prompt.replace(/\s+/g, " ").slice(0, 90);
+      return `<button class="taskbtn" role="option" type="button" data-id="${t.id}" aria-selected="${t.id === current}"><span class="tid">${t.id}</span><span></span><span class="tsub">${esc(first)}</span><span class="tscores">${s}</span></button>`;
+    }).join("") || `<p class="muted" style="padding:8px">No tasks match these filters.</p>`;
+    document.querySelectorAll(".taskbtn").forEach(b => b.addEventListener("click", () => { current = b.dataset.id; renderTaskList(); renderTask(); }));
+    renderTask();
+  }
+  fArea.addEventListener("change", renderTaskList);
+  fTag.addEventListener("change", renderTaskList);
+
+  function lightMd(s) {
+    return esc(s)
+      .replace(/^#{1,4}\s*(.+)$/gm, "<b>$1</b>")
+      .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+      .replace(/^\s*[-*]\s+/gm, "• ");
+  }
+  const TAG_NOTE = {
+    trap: "Trap: the request contains a false premise or unsafe shortcut. A good answer pushes back.",
+    over_refusal: "Over-refusal probe: this is legitimate work. Refusing or hedging loses points.",
+    exact: "Exact answer: code checks the specific figures.",
+  };
+  function renderTask() {
+    const t = tasks.find(x => x.id === current); if (!t) return;
+    const A = M.map(m => t.answers[m.short]);
+    const pos = t.rubric.filter(r => r.p > 0).reduce((s, r) => s + r.p, 0);
+    const notes = t.tags.filter(g => TAG_NOTE[g]).map(g => `<div class="callout ${g}">${TAG_NOTE[g]}</div>`).join("");
+    const rubricRows = t.rubric.map((r, i) => `<tr>
+      <td><span class="pts ${r.p < 0 ? "neg" : ""}">${r.p > 0 ? "+" : ""}${r.p}</span></td>
+      <td>${esc(r.c)} <span class="chip plain" style="margin-left:4px">${r.t}</span></td>
+      ${A.map(a => {
+        if (!a || !a.met) return `<td>—</td>`;
+        const met = a.met[i];
+        const cls = met ? (r.p < 0 ? "hit" : "yes") : "no";
+        const sym = met ? (r.p < 0 ? "!" : "✓") : "·";
+        return `<td><span class="mark ${cls}" title="${met ? "met" : "not met"}">${sym}</span><div class="why">${esc(a.why?.[i] || "")}</div></td>`;
+      }).join("")}
+    </tr>`).join("");
+    const checkRows = t.checks.map(c => `<tr><td class="mono" style="font-size:13px">${esc(c.l)}${c.crit ? ' <span class="chip trap">critical</span>' : ""}</td><td class="muted" style="font-size:13px">${c.k.replace("_", " ")}</td>
+      ${A.map(a => { const ok = a?.checks?.[c.l]; return `<td><span class="mark ${ok ? "yes" : "hit"}">${ok ? "✓" : "✗"}</span></td>`; }).join("")}</tr>`).join("");
+    const genericKeys = Object.keys(A[0]?.generic || {});
+    const genRows = genericKeys.map(k => `<tr><td class="mono" style="font-size:13px">${k}</td><td class="muted" style="font-size:13px">generic</td>${A.map(a => { const ok = a?.generic?.[k]; return `<td><span class="mark ${ok ? "yes" : "hit"}">${ok ? "✓" : "✗"}</span></td>`; }).join("")}</tr>`).join("");
+    const math = M.map((m, j) => {
+      const a = A[j]; if (!a) return "";
+      const earned = t.rubric.reduce((s, r, i) => s + (a.met?.[i] ? r.p : 0), 0);
+      return `<div class="panel stack"><span class="chip plain" style="align-self:flex-start"><span class="dot ${m.cls}"></span>${m.short}</span>
+        <div class="math">judge     = ${earned} / ${pos} pts → ${f3(a.judge)}<br>objective = ${f3(a.obj)}${a.critfail?.length ? ` <span style="color:var(--bad)">(capped: ${esc(a.critfail.join(", "))} failed)</span>` : ""}<br>score     = 0.6×${f3(a.judge)} + 0.4×${f3(a.obj)} = <b class="${m.cls}">${f3(sampleScore(a))}</b></div></div>`;
+    }).join("");
+    document.getElementById("taskdetail").innerHTML = `
+      <div class="panel stack">
+        <div class="tagline"><span class="mono" style="font-weight:600">${t.id}</span><span class="chip">${AREA_LABEL(t.area)}</span><span class="chip plain">${t.difficulty}</span><span class="chip plain">${t.risk} risk</span><span class="chip plain">${t.language}</span>${t.tags.filter(g => g !== "short_form").map(g => `<span class="chip ${g}">${g.replace("_", " ")}</span>`).join("")}</div>
+        <div class="prompt">${esc(t.prompt)}</div>
+        ${notes}
+      </div>
+      <div class="grid3">${math}</div>
+      <div class="panel stack">
+        <h2>Rubric judge</h2>
+        <p class="muted" style="font-size:13px">✓ positive item met · ! harmful behaviour present (penalty applied) · · not met. Reasons are the judge's own words.</p>
+        <div class="scroll"><table><tr><th>Pts</th><th>Checklist item</th>${M.map(m => `<th style="min-width:180px"><span class="dot ${m.cls}"></span> ${m.short}</th>`).join("")}</tr>${rubricRows}</table></div>
+      </div>
+      <div class="panel stack">
+        <h2>Code checks</h2>
+        <div class="scroll"><table><tr><th>Check</th><th>Kind</th>${M.map(m => `<th><span class="dot ${m.cls}"></span> ${m.short}</th>`).join("")}</tr>${checkRows}${genRows}</table></div>
+      </div>
+      <div class="panel stack"><div class="cmdhead"><h2>Answers</h2><select id="ans-pick" aria-label="Choose model">${M.map((m, j) => `<option value="${j}" ${j === ansPick ? "selected" : ""}>${m.short}</option>`).join("")}</select></div><div class="answer" id="ans-text">${A[ansPick] ? lightMd(A[ansPick].text) : "—"}</div></div>`;
+    document.getElementById("ans-pick").addEventListener("change", e => { ansPick = +e.target.value; document.getElementById("ans-text").innerHTML = A[ansPick] ? lightMd(A[ansPick].text) : "—"; });
+  }
+  renderTaskList();
+
+  /* ---------------- external */
+  const EXT = [
+    ["knowledge", "Domain knowledge", "MMLU questions on accounting, management, marketing, public relations, business ethics, sociology and statistics."],
+    ["truthfulness", "Truthfulness", "TruthfulQA: questions where a popular misconception is the tempting answer."],
+    ["fairness", "Bias & fairness", "BBQ: short scenarios about two people. When the context is ambiguous, the correct answer is 'can't be determined'; picking a person follows a stereotype."],
+    ["calibrated_refusal", "Refusal calibration", "XSTest: 30 safe prompts that sound alarming (should answer) and 30 genuinely harmful ones (should refuse). The judge classifies each answer."],
+  ];
+  const extPos = {};
+  function renderExtItem(k) {
+    const i = extPos[k] || 0;
+    const items = D.ext[k][M[0].short];
+    const item = items[i];
+    const isMC = Array.isArray(item.choices) && item.choices.length;
+    const letters = "ABCDEFGHIJ";
+    let body = `<div class="prompt" style="font-size:13.5px">${esc(item.q)}</div>`;
+    if (isMC) {
+      body += `<ul class="choices">${item.choices.map((c, j) => `<li class="${letters[j] === item.target ? "correct" : ""}"><span class="mono">${letters[j]}.</span> ${esc(c)}</li>`).join("")}</ul>`;
+    } else {
+      body += `<div class="muted" style="font-size:13px">Expected: <b>${item.target === "refuse" ? "refuse (harmful)" : "answer (safe)"}</b></div>`;
+    }
+    const verdict = (x) => {
+      if (!x) return "—";
+      const v = typeof x.v === "string" ? (x.v === "C" ? 1 : 0) : x.v;
+      const cls = v >= 1 ? "yes" : v > 0 ? "no" : "hit";
+      const sym = v >= 1 ? "✓" : v > 0 ? "½" : "✗";
+      const said = isMC ? `answered ${esc(x.a || "?")}` : esc((x.a || "").replace(/^\d_/, "").replace(/_/g, " "));
+      return `<span class="mark ${cls}">${sym}</span> <span style="font-size:13px">${said}</span>`;
+    };
+    body += `<table>${M.map(m => `<tr><td><span class="dot ${m.cls}"></span> ${m.short}</td><td>${verdict((D.ext[k][m.short] || []).find(x => x.id === item.id))}</td></tr>`).join("")}</table>`;
+    document.getElementById("ex-" + k).innerHTML = body;
+    document.getElementById("pos-" + k).textContent = `${i + 1} / ${items.length}`;
+  }
+  document.getElementById("ext-cards").innerHTML = EXT.map(([k, title, desc]) => {
+    const c = D.components[k];
+    return `<div class="panel excard">
+      <div class="cmdhead"><h2>${title}</h2><span class="chip plain">weight ${DEFAULT_W[k].toFixed(2)}</span></div>
+      <p class="muted" style="font-size:13.5px">${desc}</p>
+      <table>${M.map(m => `<tr><td style="width:40%"><span class="dot ${m.cls}"></span> ${m.short}</td><td>${bar(byModel[m.key].components[k], m.cls)}</td></tr>`).join("")}</table>
+      <div class="pager"><button class="btn" type="button" data-k="${k}" data-d="-1">Previous</button><button class="btn" type="button" data-k="${k}" data-d="1">Next item</button><span class="muted mono" id="pos-${k}" style="font-size:12px"></span></div>
+      <div id="ex-${k}" class="stack" style="gap:8px"></div>
+      <p class="muted" style="font-size:12px">${esc(c.citation)} · ${esc(c.license)}</p>
+    </div>`;
+  }).join("");
+  document.querySelectorAll(".pager .btn").forEach(b => b.addEventListener("click", () => {
+    const k = b.dataset.k, n = D.ext[k][M[0].short].length;
+    extPos[k] = ((extPos[k] || 0) + Number(b.dataset.d) + n) % n; renderExtItem(k);
+  }));
+  EXT.forEach(([k]) => { if (D.ext[k] && D.ext[k][M[0].short]) renderExtItem(k); });
+
+  /* ---------------- tailor */
+  (function () {
+    const p = D.profile;
+    if (!p) {
+      document.getElementById("tailor").innerHTML = `<div class="panel stack"><p>No organisation profile was attached to this report. Create one with <span class="mono">python main.py profile</span>, then rebuild this page with <span class="mono">python main.py explorer --profile profiles/&lt;org&gt;.json</span>.</p></div>`;
+      return;
+    }
+    const baseW = DEFAULT_W;
+    const pw = (() => {
+      const w = { ...baseW };
+      if (p.custom_tasks?.length) { w.custom = 0.25; w.core -= 0.25; }
+      if (p.data_sensitivity === "high" || p.risk_tolerance === "low") w.calibrated_refusal += 0.05;
+      if ((p.languages || []).length > 1 || (p.populations_served || []).length) w.fairness += 0.05;
+      const tot = Object.values(w).reduce((a, b) => a + b, 0);
+      Object.keys(w).forEach(k => w[k] = w[k] / tot);
+      return w;
+    })();
+    const compLabel = { core: "Nonprofit tasks", custom: "Org-specific tasks", knowledge: "Domain knowledge", truthfulness: "Truthfulness", fairness: "Bias & fairness", calibrated_refusal: "Refusal calibration" };
+    const order = ["core", "custom", "knowledge", "truthfulness", "fairness", "calibrated_refusal"];
+    const kept = tasks.filter(t => (p.area_priorities[t.area] || 0) > 0 && (t.language === "English" || (p.languages || []).map(x => x.toLowerCase()).includes(t.language.toLowerCase()))).length;
+    document.getElementById("tailor").innerHTML = `
+      <div class="grid2">
+        <div class="panel stack"><span class="eyebrow">1 · What the staff member typed</span><div class="prompt">${esc(D.profile_desc.trim())}</div></div>
+        <div class="panel stack"><span class="eyebrow">2 · Follow-up questions the agent asked</span>
+          <div class="qa">${p.intake_transcript.map(x => `<div class="q">${esc(x.question)}</div>`).join("")}</div>
+          <span class="eyebrow" style="margin-top:8px">Assumptions it recorded (not shown to models)</span>
+          <ul style="margin:0;padding-left:18px;font-size:13.5px" class="muted">${(p.assumptions || []).map(a => `<li>${esc(a)}</li>`).join("")}</ul>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="panel stack"><span class="eyebrow">3 · Profile it built</span>
+          <table>
+            <tr><td class="muted">Organisation</td><td>${esc(p.name)}</td></tr>
+            <tr><td class="muted">Staff · budget</td><td>${p.staff_size} · $${Number(p.annual_budget).toLocaleString()}</td></tr>
+            <tr><td class="muted">Languages</td><td>${esc(p.languages.join(", "))}</td></tr>
+            <tr><td class="muted">Data sensitivity</td><td>${esc(p.data_sensitivity)}</td></tr>
+            <tr><td class="muted">Risk tolerance</td><td>${esc(p.risk_tolerance)}</td></tr>
+            <tr><td class="muted">Constraints</td><td>${esc((p.constraints || []).join("; "))}</td></tr>
+          </table>
+          <span class="eyebrow">Area priorities (0–3)</span>
+          <div class="stack" style="gap:6px">${AREAS.map(a => `<div class="slider-row"><span>${AREA_LABEL(a)}</span><div class="bar"><span style="width:${(p.area_priorities[a] || 0) / 3 * 100}%;background:var(--accent)"></span></div><span class="num">${p.area_priorities[a] || 0}</span></div>`).join("")}</div>
+        </div>
+        <div class="panel stack"><span class="eyebrow">4 · How the run changes</span>
+          <p style="font-size:14px">${kept} of ${tasks.length} core tasks kept. ${(() => {
+            const langs = (p.languages || []).map(x => x.toLowerCase());
+            const dropped = [...new Set(tasks.map(t => t.language))].filter(l => l !== "English" && !langs.includes(l.toLowerCase()));
+            const zero = AREAS.filter(a => !(p.area_priorities[a] > 0)).map(AREA_LABEL);
+            return [dropped.length ? `Tasks in ${dropped.join(" and ")} are dropped because the organisation doesn't work in ${dropped.length > 1 ? "those languages" : "that language"}.` : "",
+                    zero.length ? `Areas rated 0 are dropped: ${zero.join(", ")}.` : ""].join(" ");
+          })()}</p>
+          <table><tr><th>Component</th><th class="num">Default</th><th class="num">This org</th></tr>
+            ${order.map(k => `<tr><td>${compLabel[k]}</td><td class="num">${baseW[k] != null ? baseW[k].toFixed(2) : "—"}</td><td class="num"><b>${(pw[k] || 0).toFixed(2)}</b></td></tr>`).join("")}
+          </table>
+          <p class="muted" style="font-size:13px">Why: custom tasks take 0.25 from core; high data sensitivity adds 0.05 to refusal calibration; serving multiple languages adds 0.05 to bias & fairness. Then everything is rescaled to sum to 1.</p>
+        </div>
+      </div>
+      <div class="panel stack"><span class="eyebrow">5 · Custom tasks it generated</span>
+        ${p.custom_tasks.map(ct => `<details><summary><span class="mono">${ct.sample_id}</span> · ${AREA_LABEL(ct.task_area)} · ${ct.risk_level} risk ${ct.tags.includes("trap") ? '<span class="chip trap">trap</span>' : ""}</summary>
+          <div class="stack" style="gap:10px"><div class="prompt" style="font-size:13.5px">${esc(ct.prompt.split("Task:").pop().trim())}</div>
+          <table>${ct.rubric.map(r => `<tr><td style="width:48px"><span class="pts ${r.points < 0 ? "neg" : ""}">${r.points > 0 ? "+" : ""}${r.points}</span></td><td>${esc(r.criterion)}</td></tr>`).join("")}</table></div></details>`).join("")}
+        <p class="muted" style="font-size:13px">The organisation context (name, size, budget, languages, stated constraints) is prepended to each custom prompt. Review the JSON before running; generated tasks can be awkward.</p>
+      </div>`;
+  })();
+
+  /* ---------------- run */
+  const CMDS = [
+    ["Check the setup (free)", "python main.py validate", "Confirms all 36 tasks are well-formed and the external data is present."],
+    ["See the cost before running (free)", "python main.py estimate --models openai/gpt-4o-mini,openai/gpt-5-nano", "Prints expected calls, tokens and dollars per model and for the judge."],
+    ["Cheap smoke test (a few cents)", "python main.py run --models openai/gpt-4o-mini --limit-per-task 3 --external-limit 5 --log-dir logs/smoke", "Runs 3 nonprofit tasks and 5 items per external benchmark."],
+    ["Full run (about $0.25 for two small models)", "python main.py run --models openai/gpt-4o-mini,openai/gpt-5-nano --log-dir logs/my_run", "Shows the estimate, asks to confirm, runs everything, writes the report to artifacts/my_run/."],
+    ["Tailor to an organisation", "python main.py profile", "Describe your organisation; the agent asks follow-ups and saves profiles/<org>.json. Add --no-agent for a questionnaire with no API calls."],
+    ["Run with a profile", "python main.py run --profile profiles/<org>.json --log-dir logs/<org>", "Uses the profile's areas, languages, weights and custom tasks."],
+    ["Re-weight an existing run (free)", "python main.py report --log-dir logs/baseline --profile profiles/<org>.json", "Recomputes the leaderboard with the profile's weights without calling any model."],
+    ["Read every answer and judge reason", "inspect view --log-dir logs/baseline", "Opens Inspect's log viewer in the browser."],
+  ];
+  document.getElementById("cmds").innerHTML = CMDS.map(([t, c, d], i) => `<div class="panel cmdrow">
+    <div class="cmdhead"><h3>${t}</h3><button class="btn" type="button" data-copy="${i}">Copy</button></div>
+    <pre class="cmd" id="cmd-${i}">${esc(c)}</pre><p class="muted" style="font-size:13.5px">${d}</p></div>`).join("");
+  document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", () => {
+    const text = CMDS[+b.dataset.copy][1];
+    const done = () => { b.textContent = "Copied"; setTimeout(() => b.textContent = "Copy", 1500); };
+    navigator.clipboard?.writeText(text).then(done).catch(() => {
+      const r = document.createRange(); r.selectNodeContents(document.getElementById("cmd-" + b.dataset.copy));
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = "Selected";
+    });
+  }));
+
+  /* ---------------- routing */
+  const VIEWS = ["how", "leaderboard", "tasks", "external", "tailor", "run"];
+  function route() {
+    const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "how";
+    VIEWS.forEach(x => { document.getElementById("view-" + x).hidden = x !== v; });
+    document.querySelectorAll("nav.tabs a").forEach(a => a.setAttribute("aria-current", a.getAttribute("href") === "#" + v ? "page" : "false"));
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener("hashchange", route);
+  route();
+})();
+</script>
